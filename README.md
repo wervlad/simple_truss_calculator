@@ -1,0 +1,1 @@
+# simple_truss_calculator
