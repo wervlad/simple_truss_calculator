@@ -25,3 +25,7 @@ Feature: Simple Truss Calculator
         Given some elements added to new truss
         When Betty saves truss to file 'truss.json'
         Then she can load exactly the same truss from file 'truss.json'
+
+    Scenario: Calculate truss
+        When Betty loads truss from examples
+        Then autocalculated results are the same as she caclucated manually
