@@ -66,4 +66,4 @@ def calculate_truss(context):
 def is_truss_empty(context):
     context.conapp.writeline("print")
     truss = context.conapp.readline()
-    return truss == "[]"
+    return truss == "()"
