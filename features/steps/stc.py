@@ -59,7 +59,6 @@ def load_from_file(context, filename):
 def load_truss_from_examples(context):
     raise NotImplementedError("STEP: When Betty loads truss from examples")
 
-
 @then("autocalculated results are the same as she caclucated manually")
 def calculate_truss(context):
     raise NotImplementedError("STEP: Then autocalculated results are the same as she caclucated manually")

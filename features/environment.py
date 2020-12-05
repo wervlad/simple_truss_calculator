@@ -1,7 +1,10 @@
 #!/usr/bin/env python3.7
 # -*- coding: utf-8 -*-
+import os
 from subprocess import Popen, PIPE
 from unittest import TestCase
+
+TEST_FILENAME = "truss.json"
 
 def before_all(context):
     context.conapp = CliManager("./truss_calculator.py", "> ")
@@ -9,9 +12,15 @@ def before_all(context):
 
 def after_all(context):
     context.conapp.close()
+    os.remove(TEST_FILENAME)
 
 def before_feature(context, feature):
     pass
+
+def before_scenario(context, scenario):
+    if "skip" in scenario.effective_tags:
+        scenario.skip("Marked with @skip")
+        return
 
 class CliManager:
     """
