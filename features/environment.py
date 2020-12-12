@@ -9,6 +9,8 @@ def before_all(context):
     context.test = TestCase()
     import truss_builder
     context.truss_builder = truss_builder
+    import truss_calculator
+    context.truss_calculator = truss_calculator
 
 def after_all(context):
     os.remove(TEST_FILENAME)
