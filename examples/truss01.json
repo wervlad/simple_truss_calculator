@@ -1,0 +1,8 @@
+[
+{"id": "PS1", "type": "PinnedSupport", "x": 0.0, "y": 0.0},
+{"id": "PS2", "type": "PinnedSupport", "x": 50.0, "y": 0.0},
+{"id": "PJ3", "type": "PinJoint", "x": 25.0, "y": 100.0},
+{"end1": "PJ3", "end2": "PS1", "id": "B1", "type": "Beam"},
+{"end1": "PJ3", "end2": "PS2", "id": "B2", "type": "Beam"},
+{"angle": -90.0, "applied_to": "PJ3", "id": "F1", "type": "Force", "value": 5.0}
+]
