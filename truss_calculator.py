@@ -61,6 +61,11 @@ def calculate(truss):
         Fy_in_joint = -sum(force_y_value(f) for f in known_forces)
         b += [Fx_in_joint, Fy_in_joint]
 
+    # https://en.wikipedia.org/wiki/Rouch%C3%A9%E2%80%93Capelli_theorem
+    if len(x) > numpy.linalg.matrix_rank(a):
+        # https://en.wikipedia.org/wiki/Statically_indeterminate
+        raise ValueError("truss is statically indeterminate")
+
     x_names = [i[0]["id"] + i[1] for i in x]
     x_values = numpy.linalg.lstsq(a, b, rcond=None)[0]
     return dict(zip(x_names, x_values))
