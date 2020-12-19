@@ -65,6 +65,9 @@ def calculate(truss):
     if len(x) > numpy.linalg.matrix_rank(a):
         # https://en.wikipedia.org/wiki/Statically_indeterminate
         raise ValueError("truss is statically indeterminate")
+    a_b = numpy.concatenate((numpy.matrix(a).T, numpy.matrix(b))).T  # (a|b)
+    if numpy.linalg.matrix_rank(a) < numpy.linalg.matrix_rank(a_b):
+        raise ValueError("unbalanced truss")
 
     x_names = [i[0]["id"] + i[1] for i in x]
     x_values = numpy.linalg.lstsq(a, b, rcond=None)[0]

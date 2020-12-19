@@ -7,3 +7,6 @@ Feature: Simple Truss Calculator
 
         When Betty loads truss from 'examples/truss02.json'
         Then calculate raises exception 'truss is statically indeterminate'
+
+        When Betty loads truss from 'examples/truss03.json'
+        Then calculate raises exception 'unbalanced truss'
