@@ -13,3 +13,8 @@ def calculate_truss(context):
     context.test.assertAlmostEqual(results["PS2x"], -0.6250, places=4)
     context.test.assertAlmostEqual(results["PS1y"],  2.5000, places=4)
     context.test.assertAlmostEqual(results["PS2y"],  2.5000, places=4)
+
+@then("calculate raises exception '{msg}'")
+def calculate_raises_exception(context, msg):
+    with context.test.assertRaisesRegex(ValueError, msg):
+        results = context.truss_calculator.calculate(context.truss)
