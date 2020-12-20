@@ -16,3 +16,12 @@ Feature: Simple Truss Calculator
 
         When Betty loads truss from 'examples/truss05.json'
         Then results for 5th truss are the same as she caclucated manually
+
+        When Betty loads truss from 'examples/truss06.json'
+        Then results for 6th truss are the same as she caclucated manually
+
+        When Betty loads truss from 'examples/truss07.json'
+        Then results for 7th truss are the same as she caclucated manually
+
+        When Betty loads truss from 'examples/truss08.json'
+        Then results for 8th truss are the same as she caclucated manually

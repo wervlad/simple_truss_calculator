@@ -1,0 +1,23 @@
+[
+{"id": "PS1", "type": "PinnedSupport", "x": 0, "y": 0},
+{"id": "RS1", "type": "RollerSupport", "x": 4, "y": 0, "angle": 90},
+{"end1": "PS1", "end2": "RS1", "id": "B11", "type": "Beam"},
+{"id": "PJ3", "type": "PinJoint", "x": 0, "y": 3},
+{"end1": "PS1", "end2": "PJ3", "id": "B8", "type": "Beam"},
+{"id": "PJ4", "type": "PinJoint", "x": 4, "y": 3},
+{"end1": "RS1", "end2": "PJ4", "id": "B10", "type": "Beam"},
+{"end1": "PJ3", "end2": "PJ4", "id": "B7", "type": "Beam"},
+{"end1": "PS1", "end2": "PJ4", "id": "B9", "type": "Beam"},
+{"id": "PJ5", "type": "PinJoint", "x": 0, "y": 6},
+{"end1": "PJ3", "end2": "PJ5", "id": "B4", "type": "Beam"},
+{"id": "PJ6", "type": "PinJoint", "x": 4, "y": 6},
+{"end1": "PJ4", "end2": "PJ6", "id": "B6", "type": "Beam"},
+{"end1": "PJ3", "end2": "PJ6", "id": "B5", "type": "Beam"},
+{"end1": "PJ5", "end2": "PJ6", "id": "B3", "type": "Beam"},
+{"id": "PJ7", "type": "PinJoint", "x": 4, "y": 9},
+{"end1": "PJ6", "end2": "PJ7", "id": "B2", "type": "Beam"},
+{"end1": "PJ5", "end2": "PJ7", "id": "B1", "type": "Beam"},
+{"angle": 0, "applied_to": "PJ7", "id": "F1", "type": "Force", "value": 2},
+{"angle": 0, "applied_to": "PJ6", "id": "F2", "type": "Force", "value": 4},
+{"angle": 270, "applied_to": "PJ5", "id": "F3", "type": "Force", "value": 6}
+]
