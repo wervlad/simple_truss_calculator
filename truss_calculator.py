@@ -61,7 +61,8 @@ def calculate(truss):
         Fy_in_joint = -sum(force_y_value(f) for f in known_forces)
         b += [Fx_in_joint, Fy_in_joint]
 
-    # https://en.wikipedia.org/wiki/Rouch%C3%A9%E2%80%93Capelli_theorem
+    # check that system has exactly one solution
+    # https://en.wikipedia.org/wiki/Rouché–Capelli_theorem
     if len(x) > numpy.linalg.matrix_rank(a):
         # https://en.wikipedia.org/wiki/Statically_indeterminate
         raise ValueError("truss is statically indeterminate")
