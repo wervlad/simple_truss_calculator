@@ -4,11 +4,12 @@ import os
 from cmath import exp
 from math import radians
 from re import sub
-from tkinter import (Button, Canvas, Frame, Label, PhotoImage, Tk,
-                     BOTH, FLAT, LAST, LEFT, RAISED, TOP, E, N, S, W, X, Y, YES)
+from tkinter import (Button, Canvas, Entry, Frame, Label, OptionMenu, PhotoImage,
+                     StringVar, Tk, BOTH, FLAT, LAST, LEFT, RAISED, TOP, E, N,
+                     S, W, X, Y, YES)
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter.messagebox import showerror
-from truss_builder import create_new_truss, load_from, save_as
+from truss_builder import add_item, remove_item, create_new_truss, load_from, save_as
 import truss_calculator as calc
 
 # global constants
@@ -19,6 +20,7 @@ LABEL_COLOR = "darkred"
 BACKGROUND_COLOR = "white"
 LINE_COLOR = "black"
 ACTIVE_LINE_COLOR = "green"
+JOINTS = ("PinJoint", "PinnedSupport", "RollerSupport")
 
 # global variables
 truss = create_new_truss()
@@ -30,14 +32,16 @@ def main():
     root.title("Simple Truss Calculator")
     left_panel.pack(side=LEFT, fill=Y)
     toolbar = Frame(root, bd=1, relief=RAISED)
-    buttons = ["new", "load", "save", "labels", "refresh", "calculate"]
+    buttons = ["new", "load", "save", "labels", "refresh", "calculate",
+               "pinnedSupport", "rollerSupport", "pinJoint", "beam", "force"]
     images = {}
     for b in buttons:
         images[b] = PhotoImage(file=f"img/{b}.gif")  # store in memory
         Button(toolbar,
                image=images[b],
                relief=FLAT,
-               command=globals()[b]).pack(side=LEFT, padx=2, pady=2)
+               command=globals()[camel_to_snake(b)]
+               ).pack(side=LEFT, padx=2, pady=2)
     toolbar.pack(side=TOP, fill=X)
     truss_view.pack(expand=YES, fill=BOTH)
     refresh()
@@ -52,10 +56,15 @@ def refresh():
         truss_view.tag_raise(item_type)
 
 def calculate():
+    try:
+        results = calc.calculate(truss)
+    except ValueError as e:
+        showerror("Calculate", e)
+        return
+    clear_left_pane()
     options = dict(padx=5, pady=5, sticky=W+E+N+S)
     Label(left_panel, text="Force").grid(column=0, row=0, **options)
     Label(left_panel, text="Value").grid(column=1, row=0, **options)
-    results = calc.calculate(truss)
     for row, (l, v) in enumerate(results.items(), 1):
         Label(left_panel, text=l).grid(column=0, row=row, **options)
         Label(left_panel, text=f"{v:>.4f}").grid(column=1, row=row, **options)
@@ -63,6 +72,246 @@ def calculate():
                                                                   **options)
     refresh()
     labels()
+
+def beam(**b):
+    def add_beam():
+        global truss
+        item = dict(end1=end1.get(), end2=end2.get(),
+                    type="Beam", id=item_id.get())
+        truss = add_item(truss, item)
+        clear_left_pane()
+
+    def edit_beam():
+        global truss
+        truss = remove_item(truss, b)
+        add_beam()
+
+    def delete_beam():
+        global truss
+        truss = remove_item(truss, b)
+        clear_left_pane()
+
+    clear_left_pane()
+    refresh()
+    nodes = [n["id"] for n in filter(lambda x: x["type"] in JOINTS, truss)]
+    if not nodes:
+        nodes.append("")
+    end1 = StringVar()
+    end2 = StringVar()
+    item_id = StringVar()
+    options = dict(padx=5, pady=5, sticky=W+E+N+S)
+    if b:
+        end1.set(b["end1"])
+        end2.set(b["end2"])
+        item_id.set(b["id"])
+        Label(left_panel, text=f"Edit beam {item_id.get()}").grid(row=0, columnspan=2, **options)
+        Button(left_panel, text="Edit", command=edit_beam).grid(column=0, row=4, **options)
+        Button(left_panel, text="Delete", command=delete_beam).grid(row=5, columnspan=2, **options)
+    else:
+        item_id.set(get_new_id(truss))
+        Label(left_panel, text="Add new beam").grid(row=0, columnspan=2, **options)
+        Button(left_panel, text="Add", command=add_beam).grid(column=0, row=4, **options)
+    Label(left_panel, text="ID").grid(column=0, row=1, **options)
+    Entry(left_panel, textvariable=item_id).grid(column=1, row=1, **options)
+    Label(left_panel, text="End 1").grid(column=0, row=2, **options)
+    OptionMenu(left_panel, end1, *nodes).grid(column=1, row=2, **options)
+    Label(left_panel, text="End 2").grid(column=0, row=3, **options)
+    OptionMenu(left_panel, end2, *nodes).grid(column=1, row=3, **options)
+    Button(left_panel, text="Cancel", command=clear_left_pane).grid(column=1, row=4, **options)
+    refresh()
+
+def pinned_support(**ps):
+    def add_pinned_support():
+        global truss
+        item = dict(x=float(x.get()), y=float(y.get()),
+                    type="PinnedSupport", id=item_id.get())
+        truss = add_item(truss, item)
+        clear_left_pane()
+
+    def edit_pinned_support():
+        global truss
+        truss = remove_item(truss, ps)
+        add_pinned_support()
+
+    def delete_pinned_support():
+        global truss
+        truss = remove_item(truss, ps)
+        clear_left_pane()
+
+    clear_left_pane()
+    x = StringVar()
+    y = StringVar()
+    item_id = StringVar()
+    options = dict(padx=5, pady=5, sticky=W+E+N+S)
+    if ps:
+        item_id.set(ps["id"])
+        x.set(ps["x"])
+        y.set(ps["y"])
+        Label(left_panel, text=f"Edit pinned support {item_id.get()}").grid(row=0, columnspan=2, **options)
+        Button(left_panel, text="Edit", command=edit_pinned_support).grid(column=0, row=4, **options)
+        Button(left_panel, text="Delete", command=delete_pinned_support).grid(row=5, columnspan=2, **options)
+    else:
+        Label(left_panel, text="Add new pinned support").grid(row=0, columnspan=2, **options)
+        Button(left_panel, text="Add", command=add_pinned_support).grid(column=0, row=4, **options)
+        item_id.set(get_new_id(truss))
+        x.set(0)
+        y.set(0)
+    Label(left_panel, text="ID").grid(column=0, row=1, **options)
+    Entry(left_panel, textvariable=item_id).grid(column=1, row=1, **options)
+    Label(left_panel, text="X").grid(column=0, row=2, **options)
+    Entry(left_panel, textvariable=x).grid(column=1, row=2, **options)
+    Label(left_panel, text="Y").grid(column=0, row=3, **options)
+    Entry(left_panel, textvariable=y).grid(column=1, row=3, **options)
+    Button(left_panel, text="Cancel", command=clear_left_pane).grid(column=1, row=4, **options)
+    refresh()
+
+def roller_support(**rs):
+    def add_roller_support():
+        global truss
+        item = dict(id=item_id.get(), x=float(x.get()), y=float(y.get()),
+                    angle=float(angle.get()), type="RollerSupport")
+        truss = add_item(truss, item)
+        clear_left_pane()
+
+    def edit_roller_support():
+        global truss
+        truss = remove_item(truss, rs)
+        add_roller_support()
+
+    def delete_roller_support():
+        global truss
+        truss = remove_item(truss, rs)
+        clear_left_pane()
+
+    clear_left_pane()
+    item_id = StringVar()
+    x = StringVar()
+    y = StringVar()
+    angle = StringVar()
+    options = dict(padx=5, pady=5, sticky=W+E+N+S)
+    if rs:
+        item_id.set(rs["id"])
+        x.set(rs["x"])
+        y.set(rs["y"])
+        angle.set(rs["angle"])
+        Label(left_panel, text=f"Edit roller support {item_id.get()}").grid(row=0, columnspan=2, **options)
+        Button(left_panel, text="Edit", command=edit_roller_support).grid(column=0, row=5, **options)
+        Button(left_panel, text="Delete", command=delete_roller_support).grid(row=6, columnspan=2, **options)
+    else:
+        Label(left_panel, text="Add new roller support").grid(row=0, columnspan=2, **options)
+        Button(left_panel, text="Add", command=add_roller_support).grid(column=0, row=5, **options)
+        item_id.set(get_new_id(truss))
+        x.set(0)
+        y.set(0)
+        angle.set(0)
+    Label(left_panel, text="ID").grid(column=0, row=1, **options)
+    Entry(left_panel, textvariable=item_id).grid(column=1, row=1, **options)
+    Label(left_panel, text="X").grid(column=0, row=2, **options)
+    Entry(left_panel, textvariable=x).grid(column=1, row=2, **options)
+    Label(left_panel, text="Y").grid(column=0, row=3, **options)
+    Entry(left_panel, textvariable=y).grid(column=1, row=3, **options)
+    Label(left_panel, text="Angle").grid(column=0, row=4, **options)
+    Entry(left_panel, textvariable=angle).grid(column=1, row=4, **options)
+    Button(left_panel, text="Cancel", command=clear_left_pane).grid(column=1, row=5, **options)
+    refresh()
+
+def pin_joint(**pj):
+    def add_pin_joint():
+        global truss
+        item = dict(x=float(x.get()), y=float(y.get()),
+                    type="PinJoint", id=item_id.get())
+        truss = add_item(truss, item)
+        clear_left_pane()
+
+    def edit_pin_joint():
+        global truss
+        truss = remove_item(truss, pj)
+        add_pin_joint()
+
+    def delete_pin_joint():
+        global truss
+        truss = remove_item(truss, pj)
+        clear_left_pane()
+
+    clear_left_pane()
+    x = StringVar()
+    y = StringVar()
+    item_id = StringVar()
+    options = dict(padx=5, pady=5, sticky=W+E+N+S)
+    if pj:
+        item_id.set(pj["id"])
+        x.set(pj["x"])
+        y.set(pj["y"])
+        Label(left_panel, text=f"Edit pin joint {item_id.get()}").grid(row=0, columnspan=2, **options)
+        Button(left_panel, text="Edit", command=edit_pin_joint).grid(column=0, row=4, **options)
+        Button(left_panel, text="Delete", command=delete_pin_joint).grid(row=5, columnspan=2, **options)
+    else:
+        Label(left_panel, text="Add new pin joint").grid(row=0, columnspan=2, **options)
+        Button(left_panel, text="Add", command=add_pin_joint).grid(column=0, row=4, **options)
+        item_id.set(get_new_id(truss))
+        x.set(0)
+        y.set(0)
+    Label(left_panel, text="ID").grid(column=0, row=1, **options)
+    Entry(left_panel, textvariable=item_id).grid(column=1, row=1, **options)
+    Label(left_panel, text="X").grid(column=0, row=2, **options)
+    Entry(left_panel, textvariable=x).grid(column=1, row=2, **options)
+    Label(left_panel, text="Y").grid(column=0, row=3, **options)
+    Entry(left_panel, textvariable=y).grid(column=1, row=3, **options)
+    Button(left_panel, text="Cancel", command=clear_left_pane).grid(column=1, row=4, **options)
+    refresh()
+
+def force(**f):
+    def add_force():
+        global truss
+        item = dict(applied_to=applied_to.get(), value=float(value.get()),
+                    angle=float(angle.get()), type="Force", id=item_id.get())
+        truss = add_item(truss, item)
+        clear_left_pane()
+
+    def edit_force():
+        global truss
+        truss = remove_item(truss, f)
+        add_force()
+
+    def delete_force():
+        global truss
+        truss = remove_item(truss, f)
+        clear_left_pane()
+
+    clear_left_pane()
+    refresh()
+    nodes = [n["id"] for n in filter(lambda x: x["type"] in JOINTS, truss)]
+    if not nodes:
+        nodes.append("")
+    item_id = StringVar()
+    applied_to = StringVar()
+    value = StringVar()
+    angle = StringVar()
+    options = dict(padx=5, pady=5, sticky=W+E+N+S)
+    if f:
+        applied_to.set(f["applied_to"])
+        value.set(f["value"])
+        angle.set(f["angle"])
+        item_id.set(f["id"])
+        Label(left_panel, text=f"Edit force {item_id.get()}").grid(row=0, columnspan=2, **options)
+        Button(left_panel, text="Edit", command=edit_force).grid(column=0, row=5, **options)
+        Button(left_panel, text="Delete", command=delete_force).grid(row=6, columnspan=2, **options)
+    else:
+        item_id.set(get_new_id(truss))
+        value.set(0)
+        angle.set(0)
+        Label(left_panel, text="Add new force").grid(row=0, columnspan=2, **options)
+        Button(left_panel, text="Add", command=add_force).grid(column=0, row=5, **options)
+    Label(left_panel, text="ID").grid(column=0, row=1, **options)
+    Entry(left_panel, textvariable=item_id).grid(column=1, row=1, **options)
+    Label(left_panel, text="Applied to").grid(column=0, row=2, **options)
+    OptionMenu(left_panel, applied_to, *nodes).grid(column=1, row=2, **options)
+    Label(left_panel, text="Value").grid(column=0, row=3, **options)
+    Entry(left_panel, textvariable=value).grid(column=1, row=3, **options)
+    Label(left_panel, text="Angle").grid(column=0, row=4, **options)
+    Entry(left_panel, textvariable=angle).grid(column=1, row=4, **options)
+    Button(left_panel, text="Cancel", command=clear_left_pane).grid(column=1, row=5, **options)
+    refresh()
 
 def clear_left_pane():
     for child in left_panel.winfo_children():
@@ -95,6 +344,9 @@ def get_truss_size(truss):
 def get_item(truss, item_id):
     return list(filter(lambda x: item_id == x["id"], truss))[0]
 
+def get_new_id(truss):
+    return "test"
+
 def to_canvas_pos(x, y, scale):
     canvas_x = x * scale + X_OFFSET
     canvas_y = int(truss_view.winfo_height()) - Y_OFFSET - y * scale
@@ -108,6 +360,7 @@ def create_circle(x, y, radius, activefill, tags):
 def create_pin_joint(pj, scale):
     x, y = to_canvas_pos(pj["x"], pj["y"], scale)
     create_circle(x, y, 4, ACTIVE_LINE_COLOR, ("PinJoint", pj["id"]))
+    truss_view.tag_bind(pj["id"], '<Button-1>', lambda _: pin_joint(**pj))
 
 def create_triangle(x, y, angle, tags):
     point2 = rotate((x, y), (x - 30, y + 10), angle)
@@ -133,6 +386,7 @@ def create_pinned_support(ps, scale):
     create_triangle(x, y, angle=-90, tags=tags)
     create_ground(x, y, distance=30, angle=-90, tags=tags)
     create_circle(x, y, 4, activefill=ACTIVE_LINE_COLOR, tags=tags)
+    truss_view.tag_bind(ps["id"], '<Button-1>', lambda _: pinned_support(**ps))
 
 def create_roller_support(rs, scale):
     tags = "RollerSupport", rs["id"]
@@ -147,6 +401,7 @@ def create_roller_support(rs, scale):
     create_circle(*wheel1_pos, 4, activefill=None, tags=tags)
     create_circle(*wheel2_pos, 4, activefill=None, tags=tags)
     create_circle(x, y, 4, activefill=ACTIVE_LINE_COLOR, tags=tags)
+    truss_view.tag_bind(rs["id"], '<Button-1>', lambda _: roller_support(**rs))
 
 def rotate(center, target, angle):
     ccenter = complex(*center)
@@ -155,21 +410,23 @@ def rotate(center, target, angle):
     ret = (ctarget - ccenter) * cangle + ccenter
     return ret.real, ret.imag
 
-def create_beam(beam, scale):
-    pj1 = get_item(truss, beam["end1"])
-    pj2 = get_item(truss, beam["end2"])
+def create_beam(b, scale):
+    pj1 = get_item(truss, b["end1"])
+    pj2 = get_item(truss, b["end2"])
     end1 = to_canvas_pos(pj1["x"], pj1["y"], scale)
     end2 = to_canvas_pos(pj2["x"], pj2["y"], scale)
     truss_view.create_line(*end1, *end2, activefill=ACTIVE_LINE_COLOR,
-                           width=2, fill=LINE_COLOR, tags=("Beam", beam["id"]))
+                           width=2, fill=LINE_COLOR, tags=("Beam", b["id"]))
+    truss_view.tag_bind(b["id"], '<Button-1>', lambda _: beam(**b))
 
-def create_force(force, scale):
-    joint = get_item(truss, force["applied_to"])
+def create_force(f, scale):
+    joint = get_item(truss, f["applied_to"])
     x2, y2 = to_canvas_pos(joint["x"], joint["y"], scale)
-    x1, y1 = rotate((x2, y2), (x2 + FORCE_LENGTH, y2), force["angle"])
+    x1, y1 = rotate((x2, y2), (x2 + FORCE_LENGTH, y2), f["angle"])
     truss_view.create_line(x1, y1, x2, y2, fill="red", width=2, arrow=LAST,
                            activefill=ACTIVE_LINE_COLOR,
-                           tags=("Force", force["id"]))
+                           tags=("Force", f["id"]))
+    truss_view.tag_bind(f["id"], '<Button-1>', lambda _: force(**f))
 
 def labels():
     scale = get_optimal_scale()
