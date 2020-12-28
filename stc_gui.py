@@ -73,6 +73,28 @@ def calculate():
     refresh()
     labels()
 
+def fill_left_pane(widgets):
+    def add_widget(w):
+        w.grid(column=column, row=row, columnspan=columnspan, **options)
+
+    options = dict(padx=5, pady=5, sticky=W+E+N+S)
+    col_count = 2
+    cell = 0
+    clear_left_pane()
+    for w in widgets:
+        row, column = divmod(cell, col_count)
+        columnspan = w.get("columnspan", 1)
+        if w["type"] == "Label":
+            add_widget(Label(left_panel, text=w["text"]))
+        elif w["type"] == "Entry":
+            add_widget(Entry(left_panel, textvariable=w["var"]))
+        elif w["type"] == "OptionMenu":
+            add_widget(OptionMenu(left_panel, w["var"], *w["nodes"]))
+        elif w["type"] == "Button":
+            add_widget(Button(left_panel, text=w["text"], command=w["command"]))
+        cell += columnspan
+    refresh()
+
 def beam(**b):
     def add_beam():
         global truss
@@ -91,34 +113,32 @@ def beam(**b):
         truss = remove_item(truss, b)
         clear_left_pane()
 
-    clear_left_pane()
-    refresh()
     nodes = [n["id"] for n in filter(lambda x: x["type"] in JOINTS, truss)]
     if not nodes:
         nodes.append("")
     end1 = StringVar()
     end2 = StringVar()
     item_id = StringVar()
-    options = dict(padx=5, pady=5, sticky=W+E+N+S)
+    widgets = [{"type": "Label", "text": "Add new beam", "columnspan": 2},
+               {"type": "Label", "text": "ID"},
+               {"type": "Entry", "var": item_id},
+               {"type": "Label", "text": "End 1"},
+               {"type": "OptionMenu", "var": end1, "nodes": nodes},
+               {"type": "Label", "text": "End 2"},
+               {"type": "OptionMenu", "var": end2, "nodes": nodes},
+               {"type": "Button", "text": "Add", "command": add_beam},
+               {"type": "Button", "text": "Cancel", "command": clear_left_pane}
+               ]
     if b:
         end1.set(b["end1"])
         end2.set(b["end2"])
         item_id.set(b["id"])
-        Label(left_panel, text=f"Edit beam {item_id.get()}").grid(row=0, columnspan=2, **options)
-        Button(left_panel, text="Edit", command=edit_beam).grid(column=0, row=4, **options)
-        Button(left_panel, text="Delete", command=delete_beam).grid(row=5, columnspan=2, **options)
-    else:
-        item_id.set(get_new_id(truss))
-        Label(left_panel, text="Add new beam").grid(row=0, columnspan=2, **options)
-        Button(left_panel, text="Add", command=add_beam).grid(column=0, row=4, **options)
-    Label(left_panel, text="ID").grid(column=0, row=1, **options)
-    Entry(left_panel, textvariable=item_id).grid(column=1, row=1, **options)
-    Label(left_panel, text="End 1").grid(column=0, row=2, **options)
-    OptionMenu(left_panel, end1, *nodes).grid(column=1, row=2, **options)
-    Label(left_panel, text="End 2").grid(column=0, row=3, **options)
-    OptionMenu(left_panel, end2, *nodes).grid(column=1, row=3, **options)
-    Button(left_panel, text="Cancel", command=clear_left_pane).grid(column=1, row=4, **options)
-    refresh()
+        widgets[0] = {"type": "Label", "text": f"Edit beam {item_id.get()}",
+                      "columnspan": 2}
+        widgets[7] = {"type": "Button", "text": "Edit", "command": edit_beam}
+        widgets.append({"type": "Button", "text": "Delete",
+                        "command": delete_beam, "columnspan": 2})
+    fill_left_pane(widgets)
 
 def pinned_support(**ps):
     def add_pinned_support():
@@ -279,7 +299,6 @@ def force(**f):
         clear_left_pane()
 
     clear_left_pane()
-    refresh()
     nodes = [n["id"] for n in filter(lambda x: x["type"] in JOINTS, truss)]
     if not nodes:
         nodes.append("")
@@ -317,7 +336,7 @@ def clear_left_pane():
     for child in left_panel.winfo_children():
         child.destroy()
     Frame(left_panel).grid()  # hide left panel
-    refresh()  # notify observers
+    refresh()
 
 def create_item(item, scale):
     globals()[f"create_{camel_to_snake(item['type'])}"](item, scale)
@@ -328,12 +347,11 @@ def camel_to_snake(s):
 def get_optimal_scale():
     width, height = get_truss_size(truss)
     truss_view.update()
-    try:
-        x_scale = (truss_view.winfo_width() - 2 * X_OFFSET) / width
-        y_scale = (truss_view.winfo_height() - 2 * Y_OFFSET) / height
-        return min(x_scale, y_scale)
-    except ZeroDivisionError:
-        return 1
+    view_width = truss_view.winfo_width() - 2 * X_OFFSET
+    view_height = truss_view.winfo_height() - 2 * Y_OFFSET
+    x_scale = view_width / width if width else view_width
+    y_scale = view_height / height if height else view_height
+    return min(x_scale, y_scale)
 
 def get_truss_size(truss):
     xs = tuple(filter(None.__ne__, (item.get("x") for item in truss)))
