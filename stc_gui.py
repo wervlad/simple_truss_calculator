@@ -1,59 +1,55 @@
 #!/usr/bin/env python3.7
 # -*- coding: utf-8 -*-
 import os
-from cmath import exp
-from math import radians
-from re import sub
-from tkinter import (Button, Canvas, Entry, Frame, Label, OptionMenu, PhotoImage,
-                     StringVar, Tk, BOTH, FLAT, LAST, LEFT, RAISED, TOP, E, N,
+from collections import OrderedDict
+from tkinter import (Button, Entry, Frame, Label, OptionMenu, PhotoImage,
+                     StringVar, Tk, BOTH, FLAT, LEFT, RAISED, TOP, E, N,
                      S, W, X, Y, YES)
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter.messagebox import showerror
 from truss_builder import add_item, remove_item, create_new_truss, load_from, save_as
 import truss_calculator as calc
+from truss_view import TrussView
+from misc import camel_to_snake
 
-# global constants
-FORCE_LENGTH = 50
-X_OFFSET = FORCE_LENGTH + 10
-Y_OFFSET = FORCE_LENGTH + 10
-LABEL_COLOR = "darkred"
-BACKGROUND_COLOR = "white"
-LINE_COLOR = "black"
-ACTIVE_LINE_COLOR = "green"
 JOINTS = ("PinJoint", "PinnedSupport", "RollerSupport")
 
 # global variables
 truss = create_new_truss()
 root = Tk()
-truss_view = Canvas(root, bg=BACKGROUND_COLOR)
+truss_view = TrussView(root, truss)
 left_panel = Frame(root)
 
 def main():
     root.title("Simple Truss Calculator")
+    truss_view.append_observer_callback(update)
     left_panel.pack(side=LEFT, fill=Y)
     toolbar = Frame(root, bd=1, relief=RAISED)
-    buttons = ["new", "load", "save", "labels", "refresh", "calculate",
-               "pinnedSupport", "rollerSupport", "pinJoint", "beam", "force"]
+    buttons = OrderedDict({"new": new,
+                           "load": load,
+                           "save": save,
+                           "labels": truss_view.create_labels,
+                           "refresh": truss_view.refresh,
+                           "calculate": calculate,
+                           "pinnedSupport": pinned_support,
+                           "rollerSupport": roller_support,
+                           "pinJoint": pin_joint,
+                           "beam": beam,
+                           "force": force})
     images = {}
-    for b in buttons:
+    for b, f  in buttons.items():
         images[b] = PhotoImage(file=f"img/{b}.gif")  # store in memory
         Button(toolbar,
                image=images[b],
                relief=FLAT,
-               command=globals()[camel_to_snake(b)]
-               ).pack(side=LEFT, padx=2, pady=2)
+               command=f).pack(side=LEFT, padx=2, pady=2)
     toolbar.pack(side=TOP, fill=X)
     truss_view.pack(expand=YES, fill=BOTH)
-    refresh()
+    truss_view.refresh()
     root.mainloop()
 
-def refresh():
-    truss_view.delete("all")
-    scale = get_optimal_scale()
-    for item in truss:
-        create_item(item, scale)
-    for item_type in ("Force", "PinJoint", "PinnedSupport", "RollerSupport"):
-        truss_view.tag_raise(item_type)
+def update(item):
+    globals()[camel_to_snake(item["type"])](**item)
 
 def calculate():
     try:
@@ -70,8 +66,8 @@ def calculate():
         Label(left_panel, text=f"{v:>.4f}").grid(column=1, row=row, **options)
     Button(left_panel, text="Hide", command=clear_left_pane).grid(columnspan=2,
                                                                   **options)
-    refresh()
-    labels()
+    truss_view.refresh()
+    truss_view.create_labels()
 
 def fill_left_pane(widgets):
     def add_widget(w):
@@ -93,7 +89,7 @@ def fill_left_pane(widgets):
         elif w["type"] == "Button":
             add_widget(Button(left_panel, text=w["text"], command=w["command"]))
         cell += columnspan
-    refresh()
+    truss_view.refresh()
 
 def beam(**b):
     def add_beam():
@@ -102,6 +98,7 @@ def beam(**b):
                     type="Beam", id=item_id.get())
         truss = add_item(truss, item)
         clear_left_pane()
+        truss_view.truss = truss
 
     def edit_beam():
         global truss
@@ -112,6 +109,7 @@ def beam(**b):
         global truss
         truss = remove_item(truss, b)
         clear_left_pane()
+        truss_view.truss = truss
 
     nodes = [n["id"] for n in filter(lambda x: x["type"] in JOINTS, truss)]
     if not nodes:
@@ -147,6 +145,7 @@ def pinned_support(**ps):
                     type="PinnedSupport", id=item_id.get())
         truss = add_item(truss, item)
         clear_left_pane()
+        truss_view.truss = truss
 
     def edit_pinned_support():
         global truss
@@ -157,6 +156,7 @@ def pinned_support(**ps):
         global truss
         truss = remove_item(truss, ps)
         clear_left_pane()
+        truss_view.truss = truss
 
     clear_left_pane()
     x = StringVar()
@@ -183,7 +183,7 @@ def pinned_support(**ps):
     Label(left_panel, text="Y").grid(column=0, row=3, **options)
     Entry(left_panel, textvariable=y).grid(column=1, row=3, **options)
     Button(left_panel, text="Cancel", command=clear_left_pane).grid(column=1, row=4, **options)
-    refresh()
+    truss_view.refresh()
 
 def roller_support(**rs):
     def add_roller_support():
@@ -192,6 +192,7 @@ def roller_support(**rs):
                     angle=float(angle.get()), type="RollerSupport")
         truss = add_item(truss, item)
         clear_left_pane()
+        truss_view.truss = truss
 
     def edit_roller_support():
         global truss
@@ -202,6 +203,7 @@ def roller_support(**rs):
         global truss
         truss = remove_item(truss, rs)
         clear_left_pane()
+        truss_view.truss = truss
 
     clear_left_pane()
     item_id = StringVar()
@@ -233,7 +235,7 @@ def roller_support(**rs):
     Label(left_panel, text="Angle").grid(column=0, row=4, **options)
     Entry(left_panel, textvariable=angle).grid(column=1, row=4, **options)
     Button(left_panel, text="Cancel", command=clear_left_pane).grid(column=1, row=5, **options)
-    refresh()
+    truss_view.refresh()
 
 def pin_joint(**pj):
     def add_pin_joint():
@@ -242,6 +244,7 @@ def pin_joint(**pj):
                     type="PinJoint", id=item_id.get())
         truss = add_item(truss, item)
         clear_left_pane()
+        truss_view.truss = truss
 
     def edit_pin_joint():
         global truss
@@ -252,6 +255,7 @@ def pin_joint(**pj):
         global truss
         truss = remove_item(truss, pj)
         clear_left_pane()
+        truss_view.truss = truss
 
     clear_left_pane()
     x = StringVar()
@@ -278,7 +282,7 @@ def pin_joint(**pj):
     Label(left_panel, text="Y").grid(column=0, row=3, **options)
     Entry(left_panel, textvariable=y).grid(column=1, row=3, **options)
     Button(left_panel, text="Cancel", command=clear_left_pane).grid(column=1, row=4, **options)
-    refresh()
+    truss_view.refresh()
 
 def force(**f):
     def add_force():
@@ -287,6 +291,7 @@ def force(**f):
                     angle=float(angle.get()), type="Force", id=item_id.get())
         truss = add_item(truss, item)
         clear_left_pane()
+        truss_view.truss = truss
 
     def edit_force():
         global truss
@@ -297,6 +302,7 @@ def force(**f):
         global truss
         truss = remove_item(truss, f)
         clear_left_pane()
+        truss_view.truss = truss
 
     clear_left_pane()
     nodes = [n["id"] for n in filter(lambda x: x["type"] in JOINTS, truss)]
@@ -330,152 +336,21 @@ def force(**f):
     Label(left_panel, text="Angle").grid(column=0, row=4, **options)
     Entry(left_panel, textvariable=angle).grid(column=1, row=4, **options)
     Button(left_panel, text="Cancel", command=clear_left_pane).grid(column=1, row=5, **options)
-    refresh()
+    truss_view.refresh()
 
 def clear_left_pane():
     for child in left_panel.winfo_children():
         child.destroy()
     Frame(left_panel).grid()  # hide left panel
-    refresh()
-
-def create_item(item, scale):
-    globals()[f"create_{camel_to_snake(item['type'])}"](item, scale)
-
-def camel_to_snake(s):
-    return sub("([a-z0-9])([A-Z])", r"\1_\2", s).lower()
-
-def get_optimal_scale():
-    width, height = get_truss_size(truss)
-    truss_view.update()
-    view_width = truss_view.winfo_width() - 2 * X_OFFSET
-    view_height = truss_view.winfo_height() - 2 * Y_OFFSET
-    x_scale = view_width / width if width else view_width
-    y_scale = view_height / height if height else view_height
-    return min(x_scale, y_scale)
-
-def get_truss_size(truss):
-    xs = tuple(filter(None.__ne__, (item.get("x") for item in truss)))
-    ys = tuple(filter(None.__ne__, (item.get("y") for item in truss)))
-    return (max(xs, default=0) - min(xs, default=0),
-            max(ys, default=0) - min(ys, default=0))
-
-def get_item(truss, item_id):
-    return list(filter(lambda x: item_id == x["id"], truss))[0]
+    truss_view.refresh()
 
 def get_new_id(truss):
     return "test"
 
-def to_canvas_pos(x, y, scale):
-    canvas_x = x * scale + X_OFFSET
-    canvas_y = int(truss_view.winfo_height()) - Y_OFFSET - y * scale
-    return canvas_x, canvas_y
-
-def create_circle(x, y, radius, activefill, tags):
-    truss_view.create_oval(x - radius, y - radius, x + radius, y + radius,
-                           width=2, outline=LINE_COLOR, fill=BACKGROUND_COLOR,
-                           activefill=activefill, tags=tags)
-
-def create_pin_joint(pj, scale):
-    x, y = to_canvas_pos(pj["x"], pj["y"], scale)
-    create_circle(x, y, 4, ACTIVE_LINE_COLOR, ("PinJoint", pj["id"]))
-    truss_view.tag_bind(pj["id"], '<Button-1>', lambda _: pin_joint(**pj))
-
-def create_triangle(x, y, angle, tags):
-    point2 = rotate((x, y), (x - 30, y + 10), angle)
-    point3 = rotate((x, y), (x - 30, y - 10), angle)
-    truss_view.create_polygon(x, y, *point2, *point3, x, y, width=2,
-                              fill=BACKGROUND_COLOR, outline=LINE_COLOR,
-                              tags=tags)
-
-def create_ground(x, y, distance, angle, tags):
-    ground_point1 = rotate((x, y), (x - distance, y - 15), angle)
-    ground_point2 = rotate((x, y), (x - distance, y + 15), angle)
-    hatching_point1 = rotate((x, y), (x - distance - 5, y - 15), angle)
-    hatching_point2 = rotate((x, y), (x - distance - 5, y + 15), angle)
-
-    truss_view.create_line(*ground_point1, *ground_point2, width=2, tags=tags)
-    truss_view.create_line(*hatching_point1, *hatching_point2, width=10,
-                           dash=(2, 2), tags=tags)
-
-def create_pinned_support(ps, scale):
-    tags = "PinnedSupport", ps["id"]
-    x, y = to_canvas_pos(ps["x"], ps["y"], scale)
-
-    create_triangle(x, y, angle=-90, tags=tags)
-    create_ground(x, y, distance=30, angle=-90, tags=tags)
-    create_circle(x, y, 4, activefill=ACTIVE_LINE_COLOR, tags=tags)
-    truss_view.tag_bind(ps["id"], '<Button-1>', lambda _: pinned_support(**ps))
-
-def create_roller_support(rs, scale):
-    tags = "RollerSupport", rs["id"]
-    x, y = to_canvas_pos(rs["x"], rs["y"], scale)
-    angle = -rs["angle"]
-    radius = 4
-    wheel1_pos = rotate((x, y), (x - radius - 30, y + radius - 10), angle)
-    wheel2_pos = rotate((x, y), (x - radius - 30, y - radius + 10), angle)
-
-    create_triangle(x, y, angle, tags=tags)
-    create_ground(x, y, distance=(30 + 2 * radius), angle=angle, tags=tags)
-    create_circle(*wheel1_pos, 4, activefill=None, tags=tags)
-    create_circle(*wheel2_pos, 4, activefill=None, tags=tags)
-    create_circle(x, y, 4, activefill=ACTIVE_LINE_COLOR, tags=tags)
-    truss_view.tag_bind(rs["id"], '<Button-1>', lambda _: roller_support(**rs))
-
-def rotate(center, target, angle):
-    ccenter = complex(*center)
-    ctarget = complex(*target)
-    cangle = exp(radians(angle) * 1j)
-    ret = (ctarget - ccenter) * cangle + ccenter
-    return ret.real, ret.imag
-
-def create_beam(b, scale):
-    pj1 = get_item(truss, b["end1"])
-    pj2 = get_item(truss, b["end2"])
-    end1 = to_canvas_pos(pj1["x"], pj1["y"], scale)
-    end2 = to_canvas_pos(pj2["x"], pj2["y"], scale)
-    truss_view.create_line(*end1, *end2, activefill=ACTIVE_LINE_COLOR,
-                           width=2, fill=LINE_COLOR, tags=("Beam", b["id"]))
-    truss_view.tag_bind(b["id"], '<Button-1>', lambda _: beam(**b))
-
-def create_force(f, scale):
-    joint = get_item(truss, f["applied_to"])
-    x2, y2 = to_canvas_pos(joint["x"], joint["y"], scale)
-    x1, y1 = rotate((x2, y2), (x2 + FORCE_LENGTH, y2), f["angle"])
-    truss_view.create_line(x1, y1, x2, y2, fill="red", width=2, arrow=LAST,
-                           activefill=ACTIVE_LINE_COLOR,
-                           tags=("Force", f["id"]))
-    truss_view.tag_bind(f["id"], '<Button-1>', lambda _: force(**f))
-
-def labels():
-    scale = get_optimal_scale()
-    for item in truss:
-        create_label(item, scale)
-
-def create_label(item, scale):
-    x = y = 0
-    if item["type"] == "Beam":
-        end1 = get_item(truss, item["end1"])
-        end2 = get_item(truss, item["end2"])
-        x, y = to_canvas_pos((end1["x"] + end2["x"]) / 2,
-                             (end1["y"] + end2["y"]) / 2, scale)
-    if item["type"] == "Force":
-        joint = get_item(truss, item["applied_to"])
-        x, y = to_canvas_pos(joint["x"], joint["y"], scale)
-        x, y = rotate((x, y), (x + FORCE_LENGTH / 2, y), item["angle"])
-    if item["type"] in ("PinnedSupport", "RollerSupport"):
-        x, y = to_canvas_pos(item["x"], item["y"], scale)
-    if item["type"] == "PinJoint":
-        return
-    t = truss_view.create_text(x, y, fill=LABEL_COLOR, font="Arial 10",
-                               text=item["id"], tags="Label")
-    b = truss_view.create_rectangle(truss_view.bbox(t), fill=BACKGROUND_COLOR,
-                                    outline=BACKGROUND_COLOR, tags="Label")
-    truss_view.tag_lower(b, t)
-
 def new():
     global truss
     truss = create_new_truss()
-    refresh()
+    truss_view.truss = truss
 
 def load():
     options = {"defaultextension": ".json",
@@ -487,7 +362,7 @@ def load():
         try:
             global truss
             truss = load_from(filename)
-            refresh()
+            truss_view.truss = truss
         except IOError as error:
             showerror("Failed to load data", error)
 
