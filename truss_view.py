@@ -3,7 +3,7 @@
 from cmath import exp
 from math import radians
 from tkinter import Canvas, LAST
-from truss_builder import remove_item
+from truss_builder import add_item, remove_item, create_new_truss, load_from, save_as
 from misc import camel_to_snake
 
 def rotate(center, target, angle):
@@ -33,12 +33,12 @@ class TrussView(Canvas):
     FORCE_COLOR = "red"
     ACTIVE_COLOR = "green"
 
-    def __init__(self, master, truss):
+    def __init__(self, master):
         super().__init__(master, bg=self.BACKGROUND_COLOR)
         master.bind("<Delete>", self.delete_selected)
-        self.__truss = truss
+        self.__truss = create_new_truss()
         self.__scale = self.get_optimal_scale()
-        self.__selected = set()
+        self.__selected = None
         self.refresh()
         self.observer_callbacks = []
 
@@ -50,15 +50,16 @@ class TrussView(Canvas):
     def truss(self, t):
         self.__truss = t
         self.__scale = self.get_optimal_scale()
-        self.clear_selection()
+        self.selected = None
         self.refresh()
 
-    def select(self, items):
-        self.__selected = self.__selected.union(items)
-        self.refresh()
+    @property
+    def selected(self):
+        return self.__selected
 
-    def clear_selection(self):
-        self.__selected.clear()
+    @selected.setter
+    def selected(self, item):
+        self.__selected = item
         self.refresh()
 
     def refresh(self):
@@ -85,7 +86,7 @@ class TrussView(Canvas):
         return min(x_scale, y_scale)
 
     def create_item(self, item):
-        if item["id"] in self.__selected:
+        if item == self.selected:
             color = self.HIGHLIGHT_COLOR
             activefill = None
         else:
@@ -201,12 +202,25 @@ class TrussView(Canvas):
         return canvas_x, canvas_y
 
     def item_click(self, item):
-        self.clear_selection()
-        self.select([item["id"]])
+        self.selected = item
         self.notify(dict(action="edit", item=item))
 
     def delete_selected(self, _):
-        for i in self.__selected:
-            self.__truss = remove_item(self.truss, get_item(self.truss, i))
-            self.notify(dict(action="delete", item=i))
-        self.clear_selection()
+        self.notify(dict(action="delete", item=self.selected))
+        self.__truss = remove_item(self.truss, self.selected)
+        self.selected = None
+
+    def add_item(self, i):
+        self.truss = add_item(self.truss, i)
+    
+    def replace_item(self, old, new):
+        self.truss = add_item(remove_item(self.truss, old), new)
+
+    def new_truss(self):
+        self.truss = create_new_truss()
+
+    def load_from(self, filename):
+        self.truss = load_from(filename)
+
+    def save_as(self, filename):
+        save_as(self.truss, filename)

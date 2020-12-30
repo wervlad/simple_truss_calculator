@@ -7,7 +7,6 @@ from tkinter import (Button, Entry, Frame, Label, OptionMenu, PhotoImage,
                      S, W, X, Y, YES)
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter.messagebox import showerror
-from truss_builder import add_item, remove_item, create_new_truss, load_from, save_as
 import truss_calculator as calc
 from truss_view import TrussView
 from misc import camel_to_snake
@@ -15,7 +14,7 @@ from misc import camel_to_snake
 
 # global variables
 root = Tk()
-truss_view = TrussView(root, create_new_truss())
+truss_view = TrussView(root)
 left_panel = Frame(root)
 
 def main():
@@ -23,7 +22,7 @@ def main():
     truss_view.append_observer_callback(update)
     left_panel.pack(side=LEFT, fill=Y)
     toolbar = Frame(root, bd=1, relief=RAISED)
-    buttons = OrderedDict({"new": new,
+    buttons = OrderedDict({"new": truss_view.new_truss,
                            "load": load,
                            "save": save,
                            "labels": truss_view.create_labels,
@@ -95,11 +94,11 @@ def fill_left_pane(widgets):
 
 def add(item):
     clear_left_pane()
-    truss_view.truss = add_item(truss_view.truss, item)
+    truss_view.add_item(item)
 
 def replace(old, new):
     clear_left_pane()
-    truss_view.truss = add_item(remove_item(truss_view.truss, old), new)
+    truss_view.replace_item(old, new)
 
 def beam(**b):
     def new_beam():
@@ -282,9 +281,6 @@ def get_joints(truss):
     joints = ("PinJoint", "PinnedSupport", "RollerSupport")
     return tuple(filter(lambda x: x["type"] in joints, truss))
 
-def new():
-    truss_view.truss = create_new_truss()
-
 def load():
     options = {"defaultextension": ".json",
                "filetypes": [("Truss Data", ".json")],
@@ -293,7 +289,7 @@ def load():
     filename = askopenfilename(**options)
     if filename:
         try:
-            truss_view.truss = load_from(filename)
+            truss_view.load_from(filename)
         except IOError as error:
             showerror("Failed to load data", error)
 
@@ -305,7 +301,7 @@ def save():
     filename = asksaveasfilename(**options)
     if filename:
         try:
-            save_as(truss_view.truss, filename)
+            truss_view.save_as(filename)
         except IOError as error:
             showerror("Failed to save data", error)
 
