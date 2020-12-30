@@ -173,7 +173,8 @@ class TrussView(Canvas):
 
     def create_labels(self):
         for item in self.truss:
-            self.create_label(item)
+            if item["type"] != "PinJoint":
+                self.create_label(item)
 
     def create_label(self, i):
         x = y = 0
@@ -186,10 +187,8 @@ class TrussView(Canvas):
             joint = get_item(self.truss, i["applied_to"])
             x, y = self.to_canvas_pos(joint["x"], joint["y"])
             x, y = rotate((x, y), (x + self.FORCE_LENGTH / 2, y), i["angle"])
-        if i["type"] in ("PinnedSupport", "RollerSupport"):
+        if i["type"] in ("PinJoint", "PinnedSupport", "RollerSupport"):
             x, y = self.to_canvas_pos(i["x"], i["y"])
-        if i["type"] == "PinJoint":
-            return
         t = self.create_text(x, y, text=i["id"], tags="Label", font="Arial 10",
                              fill=self.LABEL_COLOR)
         b = self.create_rectangle(self.bbox(t), fill=self.BACKGROUND_COLOR,
