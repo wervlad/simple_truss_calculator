@@ -46,8 +46,12 @@ def main():
     truss_view.refresh()
     root.mainloop()
 
-def update(item):
-    globals()[camel_to_snake(item["type"])](**item)
+def update(message):
+    if message["action"] == "edit":
+        item = message["item"]
+        globals()[camel_to_snake(item["type"])](**item)
+    elif message["action"] == "delete":
+        clear_left_pane()
 
 def calculate():
     try:
@@ -97,10 +101,6 @@ def replace(old, new):
     clear_left_pane()
     truss_view.truss = add_item(remove_item(truss_view.truss, old), new)
 
-def delete(item):
-    clear_left_pane()
-    truss_view.truss = remove_item(truss_view.truss, item)
-
 def beam(**b):
     def new_beam():
         return dict(end1=end1.get(), end2=end2.get(),
@@ -131,8 +131,6 @@ def beam(**b):
                       "columnspan": 2}
         widgets[7] = {"type": "Button", "text": "Edit",
                       "command": lambda: replace(b, new_beam())}
-        widgets.append({"type": "Button", "text": "Delete",
-                        "command": lambda: delete(b), "columnspan": 2})
     fill_left_pane(widgets)
 
 def pinned_support(**ps):
@@ -151,7 +149,6 @@ def pinned_support(**ps):
         y.set(ps["y"])
         Label(left_panel, text=f"Edit pinned support {item_id.get()}").grid(row=0, columnspan=2, **options)
         Button(left_panel, text="Edit", command=lambda: replace(ps, new_pinned_support())).grid(column=0, row=4, **options)
-        Button(left_panel, text="Delete", command=lambda: delete(ps)).grid(row=5, columnspan=2, **options)
     else:
         Label(left_panel, text="Add new pinned support").grid(row=0, columnspan=2, **options)
         Button(left_panel, text="Add", command=lambda: add(new_pinned_support())).grid(column=0, row=4, **options)
@@ -185,7 +182,6 @@ def roller_support(**rs):
         angle.set(rs["angle"])
         Label(left_panel, text=f"Edit roller support {item_id.get()}").grid(row=0, columnspan=2, **options)
         Button(left_panel, text="Edit", command=lambda: replace(rs, new_roller_support())).grid(column=0, row=5, **options)
-        Button(left_panel, text="Delete", command=lambda: delete(rs)).grid(row=6, columnspan=2, **options)
     else:
         Label(left_panel, text="Add new roller support").grid(row=0, columnspan=2, **options)
         Button(left_panel, text="Add", command=lambda: add(new_roller_support())).grid(column=0, row=5, **options)
@@ -220,7 +216,6 @@ def pin_joint(**pj):
         y.set(pj["y"])
         Label(left_panel, text=f"Edit pin joint {item_id.get()}").grid(row=0, columnspan=2, **options)
         Button(left_panel, text="Edit", command=lambda: replace(pj, new_pin_joint())).grid(column=0, row=4, **options)
-        Button(left_panel, text="Delete", command=lambda: delete(pj)).grid(row=5, columnspan=2, **options)
     else:
         Label(left_panel, text="Add new pin joint").grid(row=0, columnspan=2, **options)
         Button(left_panel, text="Add", command=lambda: add(new_pin_joint())).grid(column=0, row=4, **options)
@@ -257,7 +252,6 @@ def force(**f):
         item_id.set(f["id"])
         Label(left_panel, text=f"Edit force {item_id.get()}").grid(row=0, columnspan=2, **options)
         Button(left_panel, text="Edit", command=lambda: replace(f, new_force())).grid(column=0, row=5, **options)
-        Button(left_panel, text="Delete", command=lambda: delete(f)).grid(row=6, columnspan=2, **options)
     else:
         item_id.set(get_new_id(truss_view.truss))
         value.set(0)
