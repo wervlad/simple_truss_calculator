@@ -70,27 +70,28 @@ def calculate():
     truss_view.refresh()
     truss_view.create_labels()
 
-def fill_left_pane(widgets):
-    def add_widget(w):
-        w.grid(column=column, row=row, columnspan=columnspan, **options)
-
-    options = dict(padx=5, pady=5, sticky=W+E+N+S)
-    col_count = 2
-    cell = 0
+def create_params_grid(params, ok, cancel):
     clear_left_pane()
-    for w in widgets:
-        row, column = divmod(cell, col_count)
-        columnspan = w.get("columnspan", 1)
-        if w["type"] == "Label":
-            add_widget(Label(left_panel, text=w["text"]))
-        elif w["type"] == "Entry":
-            add_widget(Entry(left_panel, textvariable=w["var"]))
-        elif w["type"] == "OptionMenu":
-            add_widget(OptionMenu(left_panel, w["var"], *w["nodes"]))
-        elif w["type"] == "Button":
-            add_widget(Button(left_panel, text=w["text"], command=w["command"]))
-        cell += columnspan
+    options = dict(padx=5, pady=5, sticky=W+E+N+S)
+    variables = {}
+    for i, p in enumerate(params):
+        name = p["name"]
+        Label(left_panel, text=name).grid(column=0, row=i, **options)
+        variables[name] = StringVar(value=p["value"])
+        if p.get("values") is None:
+            if p.get("editable"):
+                w = Entry(left_panel, textvariable=variables[name])
+            else:
+                w = Label(left_panel, text=p["value"])
+        else:
+            w = OptionMenu(left_panel, variables[name], *p["values"])
+        w.grid(column=1, row=i, **options)
+    i += 1
+    Button(left_panel, text="OK", command=ok).grid(column=0, row=i, **options)
+    Button(left_panel, text="Cancel", command=cancel
+           ).grid(column=1, row=i, **options)
     truss_view.refresh()
+    return variables
 
 def add(item):
     clear_left_pane()
@@ -102,171 +103,70 @@ def replace(old, new):
 
 def beam(**b):
     def new_beam():
-        return dict(end1=end1.get(), end2=end2.get(),
-                    type="Beam", id=item_id.get())
+        return dict(end1=values["End 1"].get(), end2=values["End 2"].get(),
+                    type="Beam", id=values["ID"].get())
 
     nodes = [n["id"] for n in get_joints(truss_view.truss)]
     if not nodes:
         nodes.append("")
-    end1 = StringVar()
-    end2 = StringVar()
-    item_id = StringVar()
-    widgets = [{"type": "Label", "text": "Add new beam", "columnspan": 2},
-               {"type": "Label", "text": "ID"},
-               {"type": "Entry", "var": item_id},
-               {"type": "Label", "text": "End 1"},
-               {"type": "OptionMenu", "var": end1, "nodes": nodes},
-               {"type": "Label", "text": "End 2"},
-               {"type": "OptionMenu", "var": end2, "nodes": nodes},
-               {"type": "Button", "text": "Add",
-                "command": lambda: add(new_beam())},
-               {"type": "Button", "text": "Cancel", "command": clear_left_pane}
-               ]
-    if b:
-        end1.set(b["end1"])
-        end2.set(b["end2"])
-        item_id.set(b["id"])
-        widgets[0] = {"type": "Label", "text": f"Edit beam {item_id.get()}",
-                      "columnspan": 2}
-        widgets[7] = {"type": "Button", "text": "Edit",
-                      "command": lambda: replace(b, new_beam())}
-    fill_left_pane(widgets)
+    params = [{"name": "ID", "value": b.get("id"), "editable": False},
+              {"name": "End 1", "value": b.get("end1"), "values": nodes},
+              {"name": "End 2", "value": b.get("end2"), "values": nodes}]
+    ok = (lambda: replace(b, new_beam())) if b else (lambda: add(new_beam()))
+    values = create_params_grid(params, ok, clear_left_pane)
 
 def pinned_support(**ps):
-    def new_pinned_support():
-        return dict(x=float(x.get()), y=float(y.get()),
-                    type="PinnedSupport", id=item_id.get())
+    def new_ps():
+        return dict(x=float(values["X"].get()), y=float(values["Y"].get()),
+                    type="PinnedSupport", id=values["ID"].get())
 
-    clear_left_pane()
-    x = StringVar()
-    y = StringVar()
-    item_id = StringVar()
-    options = dict(padx=5, pady=5, sticky=W+E+N+S)
-    if ps:
-        item_id.set(ps["id"])
-        x.set(ps["x"])
-        y.set(ps["y"])
-        Label(left_panel, text=f"Edit pinned support {item_id.get()}").grid(row=0, columnspan=2, **options)
-        Button(left_panel, text="Edit", command=lambda: replace(ps, new_pinned_support())).grid(column=0, row=4, **options)
-    else:
-        Label(left_panel, text="Add new pinned support").grid(row=0, columnspan=2, **options)
-        Button(left_panel, text="Add", command=lambda: add(new_pinned_support())).grid(column=0, row=4, **options)
-        item_id.set(get_new_id(truss_view.truss))
-        x.set(0)
-        y.set(0)
-    Label(left_panel, text="ID").grid(column=0, row=1, **options)
-    Entry(left_panel, textvariable=item_id).grid(column=1, row=1, **options)
-    Label(left_panel, text="X").grid(column=0, row=2, **options)
-    Entry(left_panel, textvariable=x).grid(column=1, row=2, **options)
-    Label(left_panel, text="Y").grid(column=0, row=3, **options)
-    Entry(left_panel, textvariable=y).grid(column=1, row=3, **options)
-    Button(left_panel, text="Cancel", command=clear_left_pane).grid(column=1, row=4, **options)
-    truss_view.refresh()
+    params = [{"name": "ID", "value": ps.get("id"), "editable": False},
+              {"name": "X", "value": ps.get("x", 0), "editable": True},
+              {"name": "Y", "value": ps.get("y", 0), "editable": True}]
+    ok = (lambda: replace(ps, new_ps())) if ps else (lambda: add(new_ps()))
+    values = create_params_grid(params, ok, clear_left_pane)
 
 def roller_support(**rs):
-    def new_roller_support():
-        return dict(id=item_id.get(), x=float(x.get()), y=float(y.get()),
-                    angle=float(angle.get()), type="RollerSupport")
+    def new_rs():
+        return dict(x=float(values["X"].get()), y=float(values["Y"].get()),
+                    angle=float(values["Angle"].get()), type="RollerSupport",
+                    id=values["ID"].get())
 
-    clear_left_pane()
-    item_id = StringVar()
-    x = StringVar()
-    y = StringVar()
-    angle = StringVar()
-    options = dict(padx=5, pady=5, sticky=W+E+N+S)
-    if rs:
-        item_id.set(rs["id"])
-        x.set(rs["x"])
-        y.set(rs["y"])
-        angle.set(rs["angle"])
-        Label(left_panel, text=f"Edit roller support {item_id.get()}").grid(row=0, columnspan=2, **options)
-        Button(left_panel, text="Edit", command=lambda: replace(rs, new_roller_support())).grid(column=0, row=5, **options)
-    else:
-        Label(left_panel, text="Add new roller support").grid(row=0, columnspan=2, **options)
-        Button(left_panel, text="Add", command=lambda: add(new_roller_support())).grid(column=0, row=5, **options)
-        item_id.set(get_new_id(truss_view.truss))
-        x.set(0)
-        y.set(0)
-        angle.set(0)
-    Label(left_panel, text="ID").grid(column=0, row=1, **options)
-    Entry(left_panel, textvariable=item_id).grid(column=1, row=1, **options)
-    Label(left_panel, text="X").grid(column=0, row=2, **options)
-    Entry(left_panel, textvariable=x).grid(column=1, row=2, **options)
-    Label(left_panel, text="Y").grid(column=0, row=3, **options)
-    Entry(left_panel, textvariable=y).grid(column=1, row=3, **options)
-    Label(left_panel, text="Angle").grid(column=0, row=4, **options)
-    Entry(left_panel, textvariable=angle).grid(column=1, row=4, **options)
-    Button(left_panel, text="Cancel", command=clear_left_pane).grid(column=1, row=5, **options)
-    truss_view.refresh()
+    params = [{"name": "ID", "value": rs.get("id"), "editable": False},
+              {"name": "X", "value": rs.get("x", 0), "editable": True},
+              {"name": "Y", "value": rs.get("y", 0), "editable": True},
+              {"name": "Angle", "value": rs.get("angle", 0), "editable": True}]
+    ok = (lambda: replace(rs, new_rs())) if rs else (lambda: add(new_rs()))
+    values = create_params_grid(params, ok, clear_left_pane)
 
 def pin_joint(**pj):
-    def new_pin_joint():
-        return dict(x=float(x.get()), y=float(y.get()),
-                    type="PinJoint", id=item_id.get())
+    def new_pj():
+        return dict(x=float(values["X"].get()), y=float(values["Y"].get()),
+                    type="PinJoint", id=values["ID"].get())
 
-    clear_left_pane()
-    x = StringVar()
-    y = StringVar()
-    item_id = StringVar()
-    options = dict(padx=5, pady=5, sticky=W+E+N+S)
-    if pj:
-        item_id.set(pj["id"])
-        x.set(pj["x"])
-        y.set(pj["y"])
-        Label(left_panel, text=f"Edit pin joint {item_id.get()}").grid(row=0, columnspan=2, **options)
-        Button(left_panel, text="Edit", command=lambda: replace(pj, new_pin_joint())).grid(column=0, row=4, **options)
-    else:
-        Label(left_panel, text="Add new pin joint").grid(row=0, columnspan=2, **options)
-        Button(left_panel, text="Add", command=lambda: add(new_pin_joint())).grid(column=0, row=4, **options)
-        item_id.set(get_new_id(truss_view.truss))
-        x.set(0)
-        y.set(0)
-    Label(left_panel, text="ID").grid(column=0, row=1, **options)
-    Entry(left_panel, textvariable=item_id).grid(column=1, row=1, **options)
-    Label(left_panel, text="X").grid(column=0, row=2, **options)
-    Entry(left_panel, textvariable=x).grid(column=1, row=2, **options)
-    Label(left_panel, text="Y").grid(column=0, row=3, **options)
-    Entry(left_panel, textvariable=y).grid(column=1, row=3, **options)
-    Button(left_panel, text="Cancel", command=clear_left_pane).grid(column=1, row=4, **options)
-    truss_view.refresh()
+    params = [{"name": "ID", "value": pj.get("id"), "editable": False},
+              {"name": "X", "value": pj.get("x", 0), "editable": True},
+              {"name": "Y", "value": pj.get("y", 0), "editable": True}]
+    ok = (lambda: replace(pj, new_pj())) if pj else (lambda: add(new_pj()))
+    values = create_params_grid(params, ok, clear_left_pane)
 
 def force(**f):
     def new_force():
-        return dict(applied_to=applied_to.get(), value=float(value.get()),
-                    angle=float(angle.get()), type="Force", id=item_id.get())
+        return dict(id=values["ID"].get(), value=float(values["Value"].get()),
+                    applied_to=values["Applied to"].get(),
+                    angle=float(values["Angle"].get()), type="Force")
 
-    clear_left_pane()
     nodes = [n["id"] for n in get_joints(truss_view.truss)]
     if not nodes:
         nodes.append("")
-    item_id = StringVar()
-    applied_to = StringVar()
-    value = StringVar()
-    angle = StringVar()
-    options = dict(padx=5, pady=5, sticky=W+E+N+S)
-    if f:
-        applied_to.set(f["applied_to"])
-        value.set(f["value"])
-        angle.set(f["angle"])
-        item_id.set(f["id"])
-        Label(left_panel, text=f"Edit force {item_id.get()}").grid(row=0, columnspan=2, **options)
-        Button(left_panel, text="Edit", command=lambda: replace(f, new_force())).grid(column=0, row=5, **options)
-    else:
-        item_id.set(get_new_id(truss_view.truss))
-        value.set(0)
-        angle.set(0)
-        Label(left_panel, text="Add new force").grid(row=0, columnspan=2, **options)
-        Button(left_panel, text="Add", command=lambda: add(new_force())).grid(column=0, row=5, **options)
-    Label(left_panel, text="ID").grid(column=0, row=1, **options)
-    Entry(left_panel, textvariable=item_id).grid(column=1, row=1, **options)
-    Label(left_panel, text="Applied to").grid(column=0, row=2, **options)
-    OptionMenu(left_panel, applied_to, *nodes).grid(column=1, row=2, **options)
-    Label(left_panel, text="Value").grid(column=0, row=3, **options)
-    Entry(left_panel, textvariable=value).grid(column=1, row=3, **options)
-    Label(left_panel, text="Angle").grid(column=0, row=4, **options)
-    Entry(left_panel, textvariable=angle).grid(column=1, row=4, **options)
-    Button(left_panel, text="Cancel", command=clear_left_pane).grid(column=1, row=5, **options)
-    truss_view.refresh()
+    params = [
+        {"name": "ID", "value": f.get("id"), "editable": False},
+        {"name": "Applied to", "value": f.get("applied_to"), "values": nodes},
+        {"name": "Value", "value": f.get("value", 0), "editable": True},
+        {"name": "Angle", "value": f.get("angle", 0), "editable": True}]
+    ok = (lambda: replace(f, new_force())) if f else (lambda: add(new_force()))
+    values = create_params_grid(params, ok, clear_left_pane)
+
 
 def clear_left_pane():
     for child in left_panel.winfo_children():
