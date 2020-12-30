@@ -1,6 +1,5 @@
 #!/usr/bin/env python3.7
 # -*- coding: utf-8 -*-
-import os
 from collections import OrderedDict
 from tkinter import (Button, Entry, Frame, Label, OptionMenu, PhotoImage,
                      StringVar, Tk, BOTH, FLAT, LEFT, RAISED, TOP, E, N,
@@ -16,11 +15,11 @@ from misc import camel_to_snake
 root = Tk()
 truss_view = TrussView(root)
 left_panel = Frame(root)
+images = {}
 
 def main():
     root.title("Simple Truss Calculator")
     truss_view.append_observer_callback(update)
-    left_panel.pack(side=LEFT, fill=Y)
     toolbar = Frame(root, bd=1, relief=RAISED)
     buttons = OrderedDict({"new": truss_view.new_truss,
                            "load": load,
@@ -33,16 +32,13 @@ def main():
                            "pinJoint": pin_joint,
                            "beam": beam,
                            "force": force})
-    images = {}
-    for b, f  in buttons.items():
-        images[b] = PhotoImage(file=f"img/{b}.gif")  # store in memory
-        Button(toolbar,
-               image=images[b],
-               relief=FLAT,
-               command=f).pack(side=LEFT, padx=2, pady=2)
+    for i, f in buttons.items():
+        images[i] = PhotoImage(file=f"img/{i}.gif")  # prevent GC
+        Button(toolbar, image=images[i], relief=FLAT, command=f
+               ).pack(side=LEFT, padx=2, pady=2)
     toolbar.pack(side=TOP, fill=X)
+    left_panel.pack(side=LEFT, fill=Y)
     truss_view.pack(expand=YES, fill=BOTH)
-    truss_view.refresh()
     root.mainloop()
 
 def update(message):
@@ -50,28 +46,21 @@ def update(message):
         item = message["item"]
         globals()[camel_to_snake(item["type"])](**item)
     elif message["action"] == "delete":
-        clear_left_pane()
+        clear_left_panel()
 
 def calculate():
     try:
         results = calc.calculate(truss_view.truss)
+        params = [{"name": "Force", "value": "Value", "editable": False}]
+        for n, v in results.items():
+            params.append({"name": n, "value": f"{v:>.4f}", "editable": False})
+        create_params_grid(params, clear_left_panel, clear_left_panel)
+        truss_view.create_labels()
     except ValueError as e:
         showerror("Calculate", e)
-        return
-    clear_left_pane()
-    options = dict(padx=5, pady=5, sticky=W+E+N+S)
-    Label(left_panel, text="Force").grid(column=0, row=0, **options)
-    Label(left_panel, text="Value").grid(column=1, row=0, **options)
-    for row, (l, v) in enumerate(results.items(), 1):
-        Label(left_panel, text=l).grid(column=0, row=row, **options)
-        Label(left_panel, text=f"{v:>.4f}").grid(column=1, row=row, **options)
-    Button(left_panel, text="Hide", command=clear_left_pane).grid(columnspan=2,
-                                                                  **options)
-    truss_view.refresh()
-    truss_view.create_labels()
 
 def create_params_grid(params, ok, cancel):
-    clear_left_pane()
+    clear_left_panel()
     options = dict(padx=5, pady=5, sticky=W+E+N+S)
     variables = {}
     for i, p in enumerate(params):
@@ -93,12 +82,18 @@ def create_params_grid(params, ok, cancel):
     truss_view.refresh()
     return variables
 
+def clear_left_panel():
+    for child in left_panel.winfo_children():
+        child.destroy()
+    Frame(left_panel).grid()  # hide left panel
+    truss_view.refresh()
+
 def add(item):
-    clear_left_pane()
+    clear_left_panel()
     truss_view.add_item(item)
 
 def replace(old, new):
-    clear_left_pane()
+    clear_left_panel()
     truss_view.replace_item(old, new)
 
 def beam(**b):
@@ -113,7 +108,7 @@ def beam(**b):
               {"name": "End 1", "value": b.get("end1"), "values": nodes},
               {"name": "End 2", "value": b.get("end2"), "values": nodes}]
     ok = (lambda: replace(b, new_beam())) if b else (lambda: add(new_beam()))
-    values = create_params_grid(params, ok, clear_left_pane)
+    values = create_params_grid(params, ok, clear_left_panel)
 
 def pinned_support(**ps):
     def new_ps():
@@ -124,7 +119,7 @@ def pinned_support(**ps):
               {"name": "X", "value": ps.get("x", 0), "editable": True},
               {"name": "Y", "value": ps.get("y", 0), "editable": True}]
     ok = (lambda: replace(ps, new_ps())) if ps else (lambda: add(new_ps()))
-    values = create_params_grid(params, ok, clear_left_pane)
+    values = create_params_grid(params, ok, clear_left_panel)
 
 def roller_support(**rs):
     def new_rs():
@@ -137,7 +132,7 @@ def roller_support(**rs):
               {"name": "Y", "value": rs.get("y", 0), "editable": True},
               {"name": "Angle", "value": rs.get("angle", 0), "editable": True}]
     ok = (lambda: replace(rs, new_rs())) if rs else (lambda: add(new_rs()))
-    values = create_params_grid(params, ok, clear_left_pane)
+    values = create_params_grid(params, ok, clear_left_panel)
 
 def pin_joint(**pj):
     def new_pj():
@@ -148,7 +143,7 @@ def pin_joint(**pj):
               {"name": "X", "value": pj.get("x", 0), "editable": True},
               {"name": "Y", "value": pj.get("y", 0), "editable": True}]
     ok = (lambda: replace(pj, new_pj())) if pj else (lambda: add(new_pj()))
-    values = create_params_grid(params, ok, clear_left_pane)
+    values = create_params_grid(params, ok, clear_left_panel)
 
 def force(**f):
     def new_force():
@@ -165,14 +160,7 @@ def force(**f):
         {"name": "Value", "value": f.get("value", 0), "editable": True},
         {"name": "Angle", "value": f.get("angle", 0), "editable": True}]
     ok = (lambda: replace(f, new_force())) if f else (lambda: add(new_force()))
-    values = create_params_grid(params, ok, clear_left_pane)
-
-
-def clear_left_pane():
-    for child in left_panel.winfo_children():
-        child.destroy()
-    Frame(left_panel).grid()  # hide left panel
-    truss_view.refresh()
+    values = create_params_grid(params, ok, clear_left_panel)
 
 def get_new_id(truss):
     return "test"
@@ -182,11 +170,9 @@ def get_joints(truss):
     return tuple(filter(lambda x: x["type"] in joints, truss))
 
 def load():
-    options = {"defaultextension": ".json",
-               "filetypes": [("Truss Data", ".json")],
-               "initialdir": os.path.dirname(os.path.abspath(__file__)),
-               "title": "Load Truss"}
-    filename = askopenfilename(**options)
+    filename = askopenfilename(defaultextension=".json",
+                               filetypes=[("Truss Data", ".json")],
+                               title="Load Truss")
     if filename:
         try:
             truss_view.load_from(filename)
@@ -194,11 +180,9 @@ def load():
             showerror("Failed to load data", error)
 
 def save():
-    options = {"defaultextension": ".json",
-               "filetypes": [("Truss Data", ".json")],
-               "initialdir": os.path.dirname(os.path.abspath(__file__)),
-               "title": "Save Truss"}
-    filename = asksaveasfilename(**options)
+    filename = asksaveasfilename(defaultextension=".json",
+                                 filetypes=[("Truss Data", ".json")],
+                                 title="Save Truss")
     if filename:
         try:
             truss_view.save_as(filename)

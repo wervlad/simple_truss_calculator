@@ -211,7 +211,7 @@ class TrussView(Canvas):
 
     def add_item(self, i):
         self.truss = add_item(self.truss, i)
-    
+
     def replace_item(self, old, new):
         self.truss = add_item(remove_item(self.truss, old), new)
 
