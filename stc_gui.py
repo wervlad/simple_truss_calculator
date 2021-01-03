@@ -42,10 +42,16 @@ def main():
     root.mainloop()
 
 def update(message):
-    if message["action"] == "edit":
+    if message["action"] == "item_click":
         item = message["item"]
+        truss_view.selected = item
         globals()[camel_to_snake(item["type"])](**item)
+    elif message["action"] == "click":
+        truss_view.selected = None
+        clear_left_panel()
     elif message["action"] == "delete":
+        truss_view.remove_item(truss_view.selected)
+        truss_view.selected = None
         clear_left_panel()
 
 def calculate():
@@ -79,14 +85,12 @@ def create_params_grid(params, ok, cancel):
     Button(left_panel, text="OK", command=ok).grid(column=0, row=i, **options)
     Button(left_panel, text="Cancel", command=cancel
            ).grid(column=1, row=i, **options)
-    truss_view.refresh()
     return variables
 
 def clear_left_panel():
     for child in left_panel.winfo_children():
         child.destroy()
     Frame(left_panel).grid()  # hide left panel
-    truss_view.refresh()
 
 def add(item):
     clear_left_panel()

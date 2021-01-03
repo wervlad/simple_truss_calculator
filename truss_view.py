@@ -14,10 +14,14 @@ def rotate(center, target, angle):
     return ret.real, ret.imag
 
 def get_truss_size(truss):
+    dims = get_truss_dimensions(truss)
+    return (dims["right"] - dims["left"], dims["top"] - dims["bottom"])
+
+def get_truss_dimensions(truss):
     xs = tuple(filter(None.__ne__, (item.get("x") for item in truss)))
     ys = tuple(filter(None.__ne__, (item.get("y") for item in truss)))
-    return (max(xs, default=0) - min(xs, default=0),
-            max(ys, default=0) - min(ys, default=0))
+    return {"right": max(xs, default=0), "left": min(xs, default=0),
+            "top": max(ys, default=0), "bottom": min(ys, default=0)}
 
 def get_item(truss, item_id):
     return list(filter(lambda x: item_id == x["id"], truss))[0]
@@ -35,10 +39,13 @@ class TrussView(Canvas):
 
     def __init__(self, master):
         super().__init__(master, bg=self.BACKGROUND_COLOR)
-        master.bind("<Delete>", self.delete_selected)
+        master.bind("<Delete>", self.on_del_press)
+        self.bind("<Button-1>", self.on_click)
+        self.bind('<Configure>', lambda _: self.refresh())
         self.__truss = create_new_truss()
         self.__scale = self.get_optimal_scale()
         self.__selected = None
+        self.dimensions = get_truss_dimensions(self.truss)
         self.refresh()
         self.observer_callbacks = []
 
@@ -50,6 +57,7 @@ class TrussView(Canvas):
     def truss(self, t):
         self.__truss = t
         self.__scale = self.get_optimal_scale()
+        self.dimensions = get_truss_dimensions(self.truss)
         self.selected = None
         self.refresh()
 
@@ -67,6 +75,7 @@ class TrussView(Canvas):
         self.__scale = self.get_optimal_scale()
         for i in self.truss:
             self.create_item(i)
+        self.highlight_active()
         for i in ("Force", "PinJoint", "PinnedSupport", "RollerSupport"):
             self.tag_raise(i)
 
@@ -85,18 +94,15 @@ class TrussView(Canvas):
         y_scale = view_height / height if height else view_height
         return min(x_scale, y_scale)
 
-    def create_item(self, item):
-        if item == self.selected:
-            color = self.HIGHLIGHT_COLOR
-            activefill = None
-        else:
-            if item["type"] == "Force":
-                color = self.FORCE_COLOR
-            else:
-                color = self.LINE_COLOR
-            activefill = self.ACTIVE_COLOR
-        create = getattr(self, f"create_{camel_to_snake(item['type'])}")
-        create(item, color, activefill)
+    def create_item(self, i):
+        create = getattr(self, f"create_{camel_to_snake(i['type'])}")
+        color = self.FORCE_COLOR if i["type"] == "Force" else self.LINE_COLOR
+        create(i, color, self.ACTIVE_COLOR)
+
+    def highlight_active(self):
+        if self.selected:
+            for i in self.find_withtag(self.selected["id"]):
+                self.itemconfig(i, fill=self.HIGHLIGHT_COLOR, activefill="")
 
     def create_circle(self, x, y, radius, color, activefill, tags):
         self.create_oval(x - radius, y - radius, x + radius, y + radius,
@@ -106,7 +112,6 @@ class TrussView(Canvas):
     def create_pin_joint(self, pj, color, activefill):
         x, y = self.to_canvas_pos(pj["x"], pj["y"])
         self.create_circle(x, y, 4, color, activefill, ("PinJoint", pj["id"]))
-        self.tag_bind(pj["id"], "<Button-1>", lambda _: self.item_click(pj))
 
     def notify(self, message):
         for callback in self.observer_callbacks:
@@ -136,7 +141,6 @@ class TrussView(Canvas):
         self.create_triangle(x, y, angle=-90, color=color, tags=tags)
         self.create_ground(x, y, 30, angle=-90, color=color, tags=tags)
         self.create_circle(x, y, 4, color, activefill=activecolor, tags=tags)
-        self.tag_bind(ps["id"], "<Button-1>", lambda _: self.item_click(ps))
 
     def create_roller_support(self, rs, color, activecolor):
         tags = "RollerSupport", rs["id"]
@@ -151,16 +155,14 @@ class TrussView(Canvas):
         self.create_circle(*wheel1_pos, r, color, activefill=None, tags=tags)
         self.create_circle(*wheel2_pos, r, color, activefill=None, tags=tags)
         self.create_circle(x, y, r, color, activefill=activecolor, tags=tags)
-        self.tag_bind(rs["id"], "<Button-1>", lambda _: self.item_click(rs))
 
     def create_beam(self, b, color, activecolor):
-        pj1 = get_item(self.truss, b["end1"])
-        pj2 = get_item(self.truss, b["end2"])
-        end1 = self.to_canvas_pos(pj1["x"], pj1["y"])
-        end2 = self.to_canvas_pos(pj2["x"], pj2["y"])
+        joint1 = get_item(self.truss, b["end1"])
+        joint2 = get_item(self.truss, b["end2"])
+        end1 = self.to_canvas_pos(joint1["x"], joint1["y"])
+        end2 = self.to_canvas_pos(joint2["x"], joint2["y"])
         self.create_line(*end1, *end2, tags=("Beam", b["id"]), width=2,
                          fill=color, activefill=activecolor)
-        self.tag_bind(b["id"], "<Button-1>", lambda _: self.item_click(b))
 
     def create_force(self, f, color, activecolor):
         joint = get_item(self.truss, f["applied_to"])
@@ -169,7 +171,6 @@ class TrussView(Canvas):
 
         self.create_line(x1, y1, x2, y2, tags=("Force", f["id"]), width=2,
                          arrow=LAST, fill=color, activefill=activecolor)
-        self.tag_bind(f["id"], "<Button-1>", lambda _: self.item_click(f))
 
     def create_labels(self):
         for item in self.truss:
@@ -196,24 +197,33 @@ class TrussView(Canvas):
         self.tag_lower(b, t)
 
     def to_canvas_pos(self, x, y):
-        canvas_x = x * self.__scale + self.X_OFFSET
-        canvas_y = int(self.winfo_height()) - self.Y_OFFSET - y * self.__scale
+        rx = x - self.dimensions["left"]
+        canvas_x = rx * self.__scale + self.X_OFFSET
+        ry = y - self.dimensions["bottom"]
+        canvas_y = int(self.winfo_height()) - self.Y_OFFSET - ry * self.__scale
         return canvas_x, canvas_y
 
-    def item_click(self, item):
-        self.selected = item
-        self.notify(dict(action="edit", item=item))
+    def on_click(self, event):
+        items_under_cursor = self.find_withtag("current")
+        if items_under_cursor:
+            i = get_item(self.truss, self.gettags(items_under_cursor[0])[1])
+            self.notify(dict(action="item_click", item=i))
+        else:
+            x = self.canvasx(event.x)
+            y = self.canvasy(event.y)
+            self.notify(dict(action="click", x=x, y=y))
 
-    def delete_selected(self, _):
-        self.notify(dict(action="delete", item=self.selected))
-        self.__truss = remove_item(self.truss, self.selected)
-        self.selected = None
+    def on_del_press(self, _):
+        self.notify(dict(action="delete"))
 
     def add_item(self, i):
         self.truss = add_item(self.truss, i)
 
     def replace_item(self, old, new):
         self.truss = add_item(remove_item(self.truss, old), new)
+
+    def remove_item(self, i):
+        self.truss = remove_item(self.truss, i)
 
     def new_truss(self):
         self.truss = create_new_truss()
