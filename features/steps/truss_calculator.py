@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 @when("Betty loads truss from '{filename}'")
 def load_truss_from_examples(context, filename):
-    context.truss = context.truss_builder.load_from(filename)
+    context.truss.load_from(filename)
 
 @then("results for 1st truss are the same as she caclucated manually")
 def calculate_truss(context):

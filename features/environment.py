@@ -7,8 +7,8 @@ TEST_FILENAME = "truss.json"
 
 def before_all(context):
     context.test = TestCase()
-    import truss_builder
-    context.truss_builder = truss_builder
+    from truss_builder import Truss
+    context.truss = Truss()
     import truss_calculator
     context.truss_calculator = truss_calculator
 
