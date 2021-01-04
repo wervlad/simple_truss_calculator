@@ -6,6 +6,7 @@ from tkinter import (Button, Entry, Frame, Label, OptionMenu, PhotoImage,
                      S, W, X, Y, YES)
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter.messagebox import showerror
+from truss_builder import Truss
 import truss_calculator as calc
 from truss_view import TrussView
 from misc import camel_to_snake
@@ -13,7 +14,8 @@ from misc import camel_to_snake
 
 # global variables
 root = Tk()
-truss_view = TrussView(root)
+truss = Truss()
+truss_view = TrussView(root, truss)
 left_panel = Frame(root)
 images = {}
 
@@ -21,7 +23,7 @@ def main():
     root.title("Simple Truss Calculator")
     truss_view.append_observer_callback(update)
     toolbar = Frame(root, bd=1, relief=RAISED)
-    buttons = OrderedDict({"new": truss_view.new_truss,
+    buttons = OrderedDict({"new": truss.new,
                            "load": load,
                            "save": save,
                            "labels": truss_view.create_labels,
@@ -39,6 +41,8 @@ def main():
     toolbar.pack(side=TOP, fill=X)
     left_panel.pack(side=LEFT, fill=Y)
     truss_view.pack(expand=YES, fill=BOTH)
+    truss.append_observer_callback(lambda t: truss_view.update_truss(t))
+    root.bind("<Delete>", lambda _: update(dict(action="delete")))
     root.mainloop()
 
 def update(message):
@@ -50,13 +54,13 @@ def update(message):
         truss_view.selected = None
         clear_left_panel()
     elif message["action"] == "delete":
-        truss_view.remove_item(truss_view.selected)
+        truss.remove(truss_view.selected)
         truss_view.selected = None
         clear_left_panel()
 
 def calculate():
     try:
-        results = calc.calculate(truss_view.truss)
+        results = calc.calculate(truss)
         params = [{"name": "Force", "value": "Value", "editable": False}]
         for n, v in results.items():
             params.append({"name": n, "value": f"{v:>.4f}", "editable": False})
@@ -94,18 +98,18 @@ def clear_left_panel():
 
 def add(item):
     clear_left_panel()
-    truss_view.add_item(item)
+    truss.append(item)
 
 def replace(old, new):
     clear_left_panel()
-    truss_view.replace_item(old, new)
+    truss.replace(old, new)
 
 def beam(**b):
     def new_beam():
         return dict(end1=values["End 1"].get(), end2=values["End 2"].get(),
                     type="Beam", id=values["ID"].get())
 
-    nodes = [n["id"] for n in get_joints(truss_view.truss)]
+    nodes = [n["id"] for n in truss.joints]
     if not nodes:
         nodes.append("")
     params = [{"name": "ID", "value": b.get("id"), "editable": False},
@@ -155,7 +159,7 @@ def force(**f):
                     applied_to=values["Applied to"].get(),
                     angle=float(values["Angle"].get()), type="Force")
 
-    nodes = [n["id"] for n in get_joints(truss_view.truss)]
+    nodes = [n["id"] for n in truss.joints]
     if not nodes:
         nodes.append("")
     params = [
@@ -166,20 +170,13 @@ def force(**f):
     ok = (lambda: replace(f, new_force())) if f else (lambda: add(new_force()))
     values = create_params_grid(params, ok, clear_left_panel)
 
-def get_new_id(truss):
-    return "test"
-
-def get_joints(truss):
-    joints = ("PinJoint", "PinnedSupport", "RollerSupport")
-    return tuple(filter(lambda x: x["type"] in joints, truss))
-
 def load():
     filename = askopenfilename(defaultextension=".json",
                                filetypes=[("Truss Data", ".json")],
                                title="Load Truss")
     if filename:
         try:
-            truss_view.load_from(filename)
+            truss.load_from(filename)
         except IOError as error:
             showerror("Failed to load data", error)
 
@@ -189,7 +186,7 @@ def save():
                                  title="Save Truss")
     if filename:
         try:
-            truss_view.save_as(filename)
+            truss.save_as(filename)
         except IOError as error:
             showerror("Failed to save data", error)
 
