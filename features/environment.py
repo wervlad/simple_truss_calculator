@@ -2,15 +2,13 @@
 # -*- coding: utf-8 -*-
 import os
 from unittest import TestCase
+from truss import Truss
 
 TEST_FILENAME = "truss.json"
 
 def before_all(context):
     context.test = TestCase()
-    from truss_builder import Truss
     context.truss = Truss()
-    import truss_calculator
-    context.truss_calculator = truss_calculator
 
 def after_all(context):
     os.remove(TEST_FILENAME)

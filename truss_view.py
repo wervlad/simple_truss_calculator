@@ -5,12 +5,14 @@ from math import radians
 from tkinter import Canvas, LAST
 from misc import camel_to_snake
 
+
 def rotate(center, target, angle):
     ccenter = complex(*center)
     ctarget = complex(*target)
     cangle = exp(radians(angle) * 1j)
     ret = (ctarget - ccenter) * cangle + ccenter
     return ret.real, ret.imag
+
 
 class TrussView(Canvas):
     FORCE_LENGTH = 50
@@ -51,7 +53,7 @@ class TrussView(Canvas):
     def refresh(self):
         self.delete("all")
         self.__scale = self.__get_optimal_scale()
-        for i in self.__truss:
+        for i in self.__truss.items:
             self.create_item(i)
         self.highlight_active()
         for i in ("Force", "PinJoint", "PinnedSupport", "RollerSupport"):
@@ -145,7 +147,7 @@ class TrussView(Canvas):
                          arrow=LAST, fill=color, activefill=activecolor)
 
     def create_labels(self):
-        for item in self.__truss:
+        for item in self.__truss.items:
             if item["type"] != "PinJoint":
                 self.create_label(item)
 

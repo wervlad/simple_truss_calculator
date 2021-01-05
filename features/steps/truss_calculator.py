@@ -6,7 +6,7 @@ def load_truss_from_examples(context, filename):
 
 @then("results for 1st truss are the same as she caclucated manually")
 def calculate_truss(context):
-    results = context.truss_calculator.calculate(context.truss)
+    results = context.truss.calculate()
     context.test.assertAlmostEqual(results["B1"],    2.5769, places=4)
     context.test.assertAlmostEqual(results["B2"],    2.5769, places=4)
     context.test.assertAlmostEqual(results["PS1x"],  0.6250, places=4)
@@ -17,11 +17,11 @@ def calculate_truss(context):
 @then("calculate raises exception '{msg}'")
 def calculate_raises_exception(context, msg):
     with context.test.assertRaisesRegex(ValueError, msg):
-        results = context.truss_calculator.calculate(context.truss)
+        results = context.truss.calculate()
 
 @then("results for 4th truss are the same as she caclucated manually")
 def calculate_truss_4(context):
-    results = context.truss_calculator.calculate(context.truss)
+    results = context.truss.calculate()
     context.test.assertAlmostEqual(results["B1"],    2.5769, places=4)
     context.test.assertAlmostEqual(results["B2"],    2.5769, places=4)
     context.test.assertAlmostEqual(results["B3"],   -0.6250, places=4)
@@ -31,7 +31,7 @@ def calculate_truss_4(context):
 
 @then("results for 5th truss are the same as she caclucated manually")
 def calculate_truss_5(context):
-    results = context.truss_calculator.calculate(context.truss)
+    results = context.truss.calculate()
     context.test.assertAlmostEqual(results["B1"],    3.5355, places=4)
     context.test.assertAlmostEqual(results["B2"],    3.5355, places=4)
     context.test.assertAlmostEqual(results["PS1x"],  2.5000, places=4)
@@ -40,7 +40,7 @@ def calculate_truss_5(context):
 
 @then("results for 6th truss are the same as she caclucated manually")
 def calculate_truss_6(context):
-    results = context.truss_calculator.calculate(context.truss)
+    results = context.truss.calculate()
     context.test.assertAlmostEqual(results["B1"],    2.5000, places=4)
     context.test.assertAlmostEqual(results["B10"], -10.5000, places=4)
     context.test.assertAlmostEqual(results["B11"],   0.0000, places=4)
@@ -58,7 +58,7 @@ def calculate_truss_6(context):
 
 @then("results for 7th truss are the same as she caclucated manually")
 def calculate_truss_7(context):
-    results = context.truss_calculator.calculate(context.truss)
+    results = context.truss.calculate()
     context.test.assertAlmostEqual(results["B1"],   -11.1905, places=4)
     context.test.assertAlmostEqual(results["B10"],   -9.0000, places=4)
     context.test.assertAlmostEqual(results["B11"],   -3.9992, places=4)
@@ -78,7 +78,7 @@ def calculate_truss_7(context):
 
 @then("results for 8th truss are the same as she caclucated manually")
 def calculate_truss_8(context):
-    results = context.truss_calculator.calculate(context.truss)
+    results = context.truss.calculate()
     context.test.assertAlmostEqual(results["B1"],    8.2616, places=4)
     context.test.assertAlmostEqual(results["B10"], -11.3924, places=4)
     context.test.assertAlmostEqual(results["B11"],  -5.5949, places=4)

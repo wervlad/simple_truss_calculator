@@ -6,8 +6,7 @@ from tkinter import (Button, Entry, Frame, Label, OptionMenu, PhotoImage,
                      S, W, X, Y, YES)
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter.messagebox import showerror
-from truss_builder import Truss
-import truss_calculator as calc
+from truss import Truss
 from truss_view import TrussView
 from misc import camel_to_snake
 
@@ -41,7 +40,7 @@ def main():
     toolbar.pack(side=TOP, fill=X)
     left_panel.pack(side=LEFT, fill=Y)
     truss_view.pack(expand=YES, fill=BOTH)
-    truss.append_observer_callback(lambda t: truss_view.update_truss(t))
+    truss.append_observer_callback(truss_view.update_truss)
     root.bind("<Delete>", lambda _: update(dict(action="delete")))
     root.mainloop()
 
@@ -60,7 +59,7 @@ def update(message):
 
 def calculate():
     try:
-        results = calc.calculate(truss)
+        results = truss.calculate()
         params = [{"name": "Force", "value": "Value", "editable": False}]
         for n, v in results.items():
             params.append({"name": n, "value": f"{v:>.4f}", "editable": False})
