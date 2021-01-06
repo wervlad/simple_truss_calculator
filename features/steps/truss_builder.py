@@ -7,29 +7,29 @@ def create_new_truss(context):
 
 @when("Betty adds pinned support")
 def add_pinned_support(context):
-    ps = {"id": "PS1", "type": "PinnedSupport", "x": 0.0, "y": 2.598}
+    ps = {"id": "PS1", "type": "PinnedSupport", "x": 0.0, "y": 0.0}
     context.truss.append(ps)
 
 @then("she will see a pinned support in the truss")
 def pinned_support_is_in_the_truss(context):
-    ps = {"id": "PS1", "type": "PinnedSupport", "x": 0.0, "y": 2.598}
+    ps = {"id": "PS1", "type": "PinnedSupport", "x": 0.0, "y": 0.0}
     context.test.assertIn(ps, context.truss.items)
 
-@when("then adds a beam")
+@when("then adds a roller support")
 def add_beam(context):
-    beam = {"end1": "RS1", "end2": "PJ6", "id": "B13", "type": "Beam"}
-    context.truss.append(beam)
+    rs = {"id": "PS1", "type": "RollerSupport", "x": 5.0, "y": 0.0, "angle": 0}
+    context.truss.append(rs)
 
-@then("she will see a pinned support and a beam in the truss")
+@then("she will see a pinned support and a roller support in the truss")
 def pinned_support_and_beam_is_in_the_truss(context):
-    ps = {"id": "PS1", "type": "PinnedSupport", "x": 0.0, "y": 2.598}
-    beam = {"end1": "RS1", "end2": "PJ6", "id": "B13", "type": "Beam"}
+    ps = {"id": "PS1", "type": "PinnedSupport", "x": 0.0, "y": 0.0}
+    rs = {"id": "PS1", "type": "RollerSupport", "x": 5.0, "y": 0.0, "angle": 0}
     context.test.assertIn(ps, context.truss.items)
-    context.test.assertIn(beam, context.truss.items)
+    context.test.assertIn(rs, context.truss.items)
 
 @when("then deletes pinned support")
 def delete_pinned_support(context):
-    ps = {"id": "PS1", "type": "PinnedSupport", "x": 0.0, "y": 2.598}
+    ps = {"id": "PS1", "type": "PinnedSupport", "x": 0.0, "y": 0.0}
     context.truss.remove(ps)
 
 @then("the truss is empty")

@@ -131,16 +131,13 @@ class TrussView(Canvas):
         self.create_circle(x, y, r, color, activefill=activecolor, tags=tags)
 
     def create_beam(self, b, color, activecolor):
-        joint1 = self.__truss.find_by_id(b["end1"])
-        joint2 = self.__truss.find_by_id(b["end2"])
-        end1 = self.to_canvas_pos(joint1["x"], joint1["y"])
-        end2 = self.to_canvas_pos(joint2["x"], joint2["y"])
+        end1 = self.to_canvas_pos(b["x1"], b["y1"])
+        end2 = self.to_canvas_pos(b["x2"], b["y2"])
         self.create_line(*end1, *end2, tags=("Beam", b["id"]), width=2,
                          fill=color, activefill=activecolor)
 
     def create_force(self, f, color, activecolor):
-        joint = self.__truss.find_by_id(f["applied_to"])
-        x2, y2 = self.to_canvas_pos(joint["x"], joint["y"])
+        x2, y2 = self.to_canvas_pos(f["x"], f["y"])
         x1, y1 = rotate((x2, y2), (x2 + self.FORCE_LENGTH, y2), f["angle"])
 
         self.create_line(x1, y1, x2, y2, tags=("Force", f["id"]), width=2,
@@ -154,13 +151,10 @@ class TrussView(Canvas):
     def create_label(self, i):
         x = y = 0
         if i["type"] == "Beam":
-            end1 = self.__truss.find_by_id(i["end1"])
-            end2 = self.__truss.find_by_id(i["end2"])
-            x, y = self.to_canvas_pos((end1["x"] + end2["x"]) / 2,
-                                      (end1["y"] + end2["y"]) / 2)
+            x, y = self.to_canvas_pos((i["x1"] + i["x2"]) / 2,
+                                      (i["y1"] + i["y2"]) / 2)
         if i["type"] == "Force":
-            joint = self.__truss.find_by_id(i["applied_to"])
-            x, y = self.to_canvas_pos(joint["x"], joint["y"])
+            x, y = self.to_canvas_pos(i["x"], i["y"])
             x, y = rotate((x, y), (x + self.FORCE_LENGTH / 2, y), i["angle"])
         if i["type"] in self.__truss.JOINTS:
             x, y = self.to_canvas_pos(i["x"], i["y"])

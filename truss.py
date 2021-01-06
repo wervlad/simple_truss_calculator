@@ -8,6 +8,12 @@ import numpy
 
 class Truss:
     JOINTS = ("PinJoint", "PinnedSupport", "RollerSupport")
+    MANDATORY_FIELDS = dict(
+        PinJoint=("type", "id", "x", "y"),
+        PinnedSupport=("type", "id", "x", "y"),
+        RollerSupport=("type", "id", "x", "y", "angle"),
+        Beam=("type", "id", "end1", "end2"),
+        Force=("type", "id", "angle", "applied_to", "value"))
 
     def __init__(self):
         self.__items = ()
@@ -24,8 +30,20 @@ class Truss:
     @items.setter
     def items(self, t):
         self.__items = tuple(t)
+        self.__update_cache()
         self.__update_dimensions()
         self.__notify(self)
+
+    def __update_cache(self):
+        for item in self.items:
+            if item["type"] == "Beam":
+                joint1 = self.find_by_id(item["end1"])
+                joint2 = self.find_by_id(item["end2"])
+                item.update(dict(x1=joint1["x"], y1=joint1["y"],
+                                 x2=joint2["x"], y2=joint2["y"]))
+            if item["type"] == "Force":
+                joint = self.find_by_id(item["applied_to"])
+                item.update(dict(x=joint["x"], y=joint["y"]))
 
     @property
     def left(self):
@@ -59,8 +77,12 @@ class Truss:
         self.items = tuple(x for x in self.items if old != x) + (new,)
 
     def save_as(self, filename):
+        def drop_cache(items):
+            return tuple({f: i[f] for f in self.MANDATORY_FIELDS[i["type"]]}
+                         for i in items if i["id"])
+
         with open(filename, "w") as f:
-            f.write(json.dumps(self.items))
+            f.write(json.dumps(drop_cache(self.items)))
 
     def load_from(self, filename):
         with open(filename, "r") as f:
@@ -92,6 +114,14 @@ class Truss:
     @property
     def joints(self):
         return tuple(filter(lambda x: x["type"] in self.JOINTS, self.items))
+
+    def linked_beams(self, joint):
+        return tuple(beam for beam in self.find_by_type("Beam")
+                     if joint["id"] in (beam["end1"], beam["end2"]))
+
+    def linked_forces(self, joint):
+        return tuple(force for force in self.find_by_type("Force")
+                     if joint["id"] == force["applied_to"])
 
     def __notify(self, message):
         for callback in self.__observer_callbacks:
@@ -128,9 +158,7 @@ class Truss:
         for joint in self.joints:
             ax = [0] * len(x)
             ay = [0] * len(x)
-            linked_beams = (beam for beam in self.find_by_type("Beam")
-                            if joint["id"] in (beam["end1"], beam["end2"]))
-            for beam in linked_beams:
+            for beam in self.linked_beams(joint):
                 ax[x.index((beam, ""))] = cos(beam_angle(beam, joint))
                 ay[x.index((beam, ""))] = sin(beam_angle(beam, joint))
             if joint["type"] == "RollerSupport":
@@ -141,8 +169,7 @@ class Truss:
                 ay[x.index((joint, "y"))] = 1
             a += [ax, ay]
 
-            known_forces = [f for f in self.find_by_type("Force")
-                            if joint["id"] == f["applied_to"]]
+            known_forces = self.linked_forces(joint)
             Fx_in_joint = sum(force_x_value(f) for f in known_forces)
             Fy_in_joint = -sum(force_y_value(f) for f in known_forces)
             b += [Fx_in_joint, Fy_in_joint]

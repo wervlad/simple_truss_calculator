@@ -8,8 +8,8 @@ Feature: Truss Builder
 
         Given new truss created
         When Betty adds pinned support
-            And then adds a beam
-        Then she will see a pinned support and a beam in the truss
+            And then adds a roller support
+        Then she will see a pinned support and a roller support in the truss
 
     Scenario: Edit truss
         Given new truss created
