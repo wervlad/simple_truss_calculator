@@ -3,6 +3,7 @@
 from itertools import repeat
 from math import atan2, cos, sin, radians
 import json
+import re
 import numpy
 
 
@@ -126,6 +127,15 @@ class Truss:
 
     def find_by_type(self, item_type):
         return tuple(filter(lambda x: x["type"] == item_type, self.items))
+
+    def get_new_id(self, item_type):
+        def extract_index(item_id):
+            return int(re.findall(r'\d+', item_id)[0])
+
+        prefix = re.sub("[^A-Z]", "", item_type)
+        max_id = max([extract_index(i["id"])
+                      for i in self.find_by_type(item_type)], default=0)
+        return f"{prefix}{max_id + 1}"
 
     @property
     def joints(self):

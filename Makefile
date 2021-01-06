@@ -1,5 +1,5 @@
 SOURCES = $(wildcard *.py) $(wildcard */*.py)
-EXECUTABLE = stc_gui.py
+EXECUTABLE = run.py
 INTERPRETER = python3
 
 run: $(EXECUTABLE)

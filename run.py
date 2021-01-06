@@ -56,10 +56,11 @@ def update(msg):
     elif msg["action"] == "delete":
         truss.remove(truss_view.selected)
         truss_view.selected = None
-        clear_left_panel()
     elif msg["action"] == "invalid items removed":
         invalid = ", ".join(f"{i['type']} {i['id']}" for i in msg["items"])
         showerror("Warning", f"Invalid items were removed: {invalid}")
+    elif msg["action"] == "truss modified":
+        clear_left_panel()
 
 def calculate():
     try:
@@ -115,7 +116,8 @@ def beam(**b):
     nodes = [n["id"] for n in truss.joints]
     if not nodes:
         nodes.append("")
-    params = [{"name": "ID", "value": b.get("id"), "editable": False},
+    item_id = b.get("id", truss.get_new_id("Beam"))
+    params = [{"name": "ID", "value": item_id, "editable": False},
               {"name": "End 1", "value": b.get("end1"), "values": nodes},
               {"name": "End 2", "value": b.get("end2"), "values": nodes}]
     ok = (lambda: replace(b, new_beam())) if b else (lambda: add(new_beam()))
@@ -126,7 +128,8 @@ def pinned_support(**ps):
         return dict(x=float(values["X"].get()), y=float(values["Y"].get()),
                     type="PinnedSupport", id=values["ID"].get())
 
-    params = [{"name": "ID", "value": ps.get("id"), "editable": False},
+    item_id = ps.get("id", truss.get_new_id("PinnedSupport"))
+    params = [{"name": "ID", "value": item_id, "editable": False},
               {"name": "X", "value": ps.get("x", 0), "editable": True},
               {"name": "Y", "value": ps.get("y", 0), "editable": True}]
     ok = (lambda: replace(ps, new_ps())) if ps else (lambda: add(new_ps()))
@@ -138,7 +141,8 @@ def roller_support(**rs):
                     angle=float(values["Angle"].get()), type="RollerSupport",
                     id=values["ID"].get())
 
-    params = [{"name": "ID", "value": rs.get("id"), "editable": False},
+    item_id = rs.get("id", truss.get_new_id("RollerSupport"))
+    params = [{"name": "ID", "value": item_id, "editable": False},
               {"name": "X", "value": rs.get("x", 0), "editable": True},
               {"name": "Y", "value": rs.get("y", 0), "editable": True},
               {"name": "Angle", "value": rs.get("angle", 0), "editable": True}]
@@ -150,7 +154,8 @@ def pin_joint(**pj):
         return dict(x=float(values["X"].get()), y=float(values["Y"].get()),
                     type="PinJoint", id=values["ID"].get())
 
-    params = [{"name": "ID", "value": pj.get("id"), "editable": False},
+    item_id = pj.get("id", truss.get_new_id("PinJoint"))
+    params = [{"name": "ID", "value": item_id, "editable": False},
               {"name": "X", "value": pj.get("x", 0), "editable": True},
               {"name": "Y", "value": pj.get("y", 0), "editable": True}]
     ok = (lambda: replace(pj, new_pj())) if pj else (lambda: add(new_pj()))
@@ -165,8 +170,9 @@ def force(**f):
     nodes = [n["id"] for n in truss.joints]
     if not nodes:
         nodes.append("")
+    item_id = f.get("id", truss.get_new_id("Force"))
     params = [
-        {"name": "ID", "value": f.get("id"), "editable": False},
+        {"name": "ID", "value": item_id, "editable": False},
         {"name": "Applied to", "value": f.get("applied_to"), "values": nodes},
         {"name": "Value", "value": f.get("value", 0), "editable": True},
         {"name": "Angle", "value": f.get("angle", 0), "editable": True}]
