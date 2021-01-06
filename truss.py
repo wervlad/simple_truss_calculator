@@ -30,9 +30,19 @@ class Truss:
     @items.setter
     def items(self, t):
         self.__items = tuple(t)
+        self.__remove_invalid()
         self.__update_cache()
         self.__update_dimensions()
         self.__notify(self)
+
+    def __remove_invalid(self):
+        invalid_beams = tuple(b for b in self.find_by_type("Beam")
+                              if (self.find_by_id(b["end1"]) is None or
+                                  self.find_by_id(b["end2"]) is None))
+        invalid_forces = tuple(f for f in self.find_by_type("Force")
+                               if self.find_by_id(f["applied_to"]) is None)
+        invalid = invalid_beams + invalid_forces
+        self.__items = tuple(i for i in self.items if i not in invalid)
 
     def __update_cache(self):
         for item in self.items:
