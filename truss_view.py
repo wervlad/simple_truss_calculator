@@ -35,11 +35,10 @@ class TrussView(Canvas):
         self.refresh()
         self.__observer_callbacks = []
 
-    def update_truss(self, t):
-        self.__truss = t
-        self.__scale = self.__get_optimal_scale()
-        self.selected = None
-        self.refresh()
+    def update_truss(self, message):
+        if message["action"] == "truss modified":
+            self.selected = None
+            self.refresh()
 
     @property
     def selected(self):
@@ -175,7 +174,7 @@ class TrussView(Canvas):
         items_under_cursor = self.find_withtag("current")
         if items_under_cursor:
             i = self.__truss.find_by_id(self.gettags(items_under_cursor[0])[1])
-            self.__notify(dict(action="item_click", item=i))
+            self.__notify(dict(action="item click", item=i))
         else:
             x = self.canvasx(event.x)
             y = self.canvasy(event.y)

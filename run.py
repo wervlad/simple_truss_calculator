@@ -41,21 +41,25 @@ def main():
     left_panel.pack(side=LEFT, fill=Y)
     truss_view.pack(expand=YES, fill=BOTH)
     truss.append_observer_callback(truss_view.update_truss)
+    truss.append_observer_callback(update)
     root.bind("<Delete>", lambda _: update(dict(action="delete")))
     root.mainloop()
 
-def update(message):
-    if message["action"] == "item_click":
-        item = message["item"]
+def update(msg):
+    if msg["action"] == "item click":
+        item = msg["item"]
         truss_view.selected = item
         globals()[camel_to_snake(item["type"])](**item)
-    elif message["action"] == "click":
+    elif msg["action"] == "click":
         truss_view.selected = None
         clear_left_panel()
-    elif message["action"] == "delete":
+    elif msg["action"] == "delete":
         truss.remove(truss_view.selected)
         truss_view.selected = None
         clear_left_panel()
+    elif msg["action"] == "invalid items removed":
+        invalid = ", ".join(f"{i['type']} {i['id']}" for i in msg["items"])
+        showerror("Warning", f"Invalid items were removed: {invalid}")
 
 def calculate():
     try:

@@ -33,7 +33,7 @@ class Truss:
         self.__remove_invalid()
         self.__update_cache()
         self.__update_dimensions()
-        self.__notify(self)
+        self.__notify(dict(action="truss modified"))
 
     def __remove_invalid(self):
         invalid_beams = tuple(b for b in self.find_by_type("Beam")
@@ -42,7 +42,9 @@ class Truss:
         invalid_forces = tuple(f for f in self.find_by_type("Force")
                                if self.find_by_id(f["applied_to"]) is None)
         invalid = invalid_beams + invalid_forces
-        self.__items = tuple(i for i in self.items if i not in invalid)
+        if invalid:
+            self.__items = tuple(i for i in self.items if i not in invalid)
+            self.__notify(dict(action="invalid items removed", items=invalid))
 
     def __update_cache(self):
         for item in self.items:
@@ -54,6 +56,18 @@ class Truss:
             if item["type"] == "Force":
                 joint = self.find_by_id(item["applied_to"])
                 item.update(dict(x=joint["x"], y=joint["y"]))
+
+    def __update_dimensions(self):
+        xs = tuple(filter(None.__ne__, (item.get("x") for item in self.items)))
+        ys = tuple(filter(None.__ne__, (item.get("y") for item in self.items)))
+        self.__left = min(xs, default=0)
+        self.__right = max(xs, default=0)
+        self.__bottom = min(ys, default=0)
+        self.__top = max(ys, default=0)
+
+    def __notify(self, message):
+        for callback in self.__observer_callbacks:
+            callback(message)
 
     @property
     def left(self):
@@ -106,14 +120,6 @@ class Truss:
     def height(self):
         return self.top - self.bottom
 
-    def __update_dimensions(self):
-        xs = tuple(filter(None.__ne__, (item.get("x") for item in self.items)))
-        ys = tuple(filter(None.__ne__, (item.get("y") for item in self.items)))
-        self.__left = min(xs, default=0)
-        self.__right = max(xs, default=0)
-        self.__bottom = min(ys, default=0)
-        self.__top = max(ys, default=0)
-
     def find_by_id(self, item_id):
         items = tuple(filter(lambda x: item_id == x["id"], self.items))
         return items[0] if items else None
@@ -132,10 +138,6 @@ class Truss:
     def linked_forces(self, joint):
         return tuple(force for force in self.find_by_type("Force")
                      if joint["id"] == force["applied_to"])
-
-    def __notify(self, message):
-        for callback in self.__observer_callbacks:
-            callback(message)
 
     def calculate(self):
         """
