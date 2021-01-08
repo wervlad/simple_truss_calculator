@@ -53,6 +53,8 @@ def set_state(new_state):
     global state
     state = globals()[f"process_{new_state}"]()
     next(state)
+    clear_left_panel()
+    truss_view.highlighted = None
 
 def truss_update(msg):
     if msg["action"] == "invalid items removed":
@@ -65,109 +67,113 @@ def process_default():
     while True:
         msg = yield
         if msg["action"] == "item click":
-            item = msg["item"]
-            truss_view.selected = item
-            globals()[camel_to_snake(item["type"])](**item)
+            truss_view.highlighted = cur_item = msg["item"]
+            globals()[camel_to_snake(cur_item["type"])](**cur_item)
         elif msg["action"] == "click":
-            truss_view.selected = None
+            truss_view.highlighted = cur_item = None
             clear_left_panel()
         elif msg["action"] == "delete":
-            truss.remove(truss_view.selected)
-            truss_view.selected = None
+            truss.remove(cur_item)
+            truss_view.highlighted = cur_item = None
 
 def process_pj():
     while True:
         msg = yield
-        old = truss.find_by_id("")
         if msg["action"] == "move":
-            new = dict(x=msg["x"], y=msg["y"], type="PinJoint", id="")
+            truss_view.delete("tmp")
+            cur_item = dict(x=msg["x"], y=msg["y"], type="PinJoint", id="tmp")
+            truss_view.create_item(cur_item)
         elif msg["action"] == "item click":
             set_state("default")
-            new = {**old, "id": truss.get_new_id("PinJoint")}
-        truss.replace(old, new)
+            cur_item = {**cur_item, "id": truss.get_new_id("PinJoint")}
+            truss.append(cur_item)
 
 def process_ps():
     while True:
         msg = yield
-        old = truss.find_by_id("")
         if msg["action"] == "move":
-            new = dict(x=msg["x"], y=msg["y"], type="PinnedSupport", id="")
+            truss_view.delete("tmp")
+            cur_item = dict(x=msg["x"], y=msg["y"],
+                            type="PinnedSupport", id="tmp")
+            truss_view.create_item(cur_item)
         elif msg["action"] == "item click":
             set_state("default")
-            new = {**old, "id": truss.get_new_id("PinnedSupport")}
-        truss.replace(old, new)
+            cur_item = {**cur_item, "id": truss.get_new_id("PinnedSupport")}
+            truss.append(cur_item)
 
 def process_rs():
     # specify position
     while True:
         msg = yield
         if msg["action"] == "move":
-            old = truss.find_by_id("")
-            new = dict(x=msg["x"], y=msg["y"],
-                       angle=90, type="RollerSupport", id="")
-            truss.replace(old, new)
+            truss_view.delete("tmp")
+            cur_item = dict(x=msg["x"], y=msg["y"],
+                            angle=90, type="RollerSupport", id="tmp")
+            truss_view.create_item(cur_item)
         elif msg["action"] == "item click":
             break
     # specify angle
     while True:
         msg = yield
-        old = truss.find_by_id("")
         if msg["action"] == "move":
-            angle = degrees(atan2(old["y"] - msg["y"], old["x"] - msg["x"]))
-            new = {**old, "angle": angle}
+            truss_view.delete("tmp")
+            angle = degrees(atan2(cur_item["y"] - msg["y"],
+                                  cur_item["x"] - msg["x"]))
+            cur_item = {**cur_item, "angle": angle}
+            truss_view.create_item(cur_item)
         elif msg["action"] in ("click", "item click"):
             set_state("default")
-            new = {**old, "id": truss.get_new_id("RollerSupport")}
-        truss.replace(old, new)
+            cur_item = {**cur_item, "id": truss.get_new_id("RollerSupport")}
+            truss.append(cur_item)
 
 def process_beam():
     # specify 1st end
     while True:
         m = yield
         if m["action"] == "item click" and m["item"]["type"] in truss.JOINTS:
-            old = truss.find_by_id("")
             j = m["item"]
-            new = dict(x1=j["x"], y1=j["y"], x2=j["x"], y2=j["y"],
-                       end1=j["id"], type="Beam", id="")
-            truss.replace(old, new)
+            cur_item = dict(x1=j["x"], y1=j["y"], x2=j["x"], y2=j["y"],
+                            end1=j["id"], type="Beam", id="tmp")
             break
     # specify 2nd end
     while True:
         m = yield
-        old = truss.find_by_id("")
         if m["action"] == "move":
-            new = {**old, "x2": m["x"], "y2": m["y"]}
-        elif m["action"] == "item click" and m["item"]["type"] in truss.JOINTS:
+            truss_view.delete("tmp")
+            cur_item = {**cur_item, "x2": m["x"], "y2": m["y"]}
+            truss_view.create_item(cur_item)
+            truss_view.tag_lower("tmp")
+        elif m["action"] == "item click" and m["item"] and m["item"]["type"] in truss.JOINTS:
             set_state("default")
             j = m["item"]
-            new = {**old, "end2": j["id"], "id": truss.get_new_id("Beam")}
-        truss.replace(old, new)
+            cur_item = {**cur_item, "end2": j["id"], "id": truss.get_new_id("Beam")}
+            truss.append(cur_item)
 
 def process_force():
     # specify application
     while True:
         m = yield
         if m["action"] == "item click" and m["item"]["type"] in truss.JOINTS:
-            old = truss.find_by_id("")
             j = m["item"]
-            new = dict(applied_to=j["id"], x=j["x"], y=j["y"],
-                       angle=0, value=0, type="Force", id="")
-            truss.replace(old, new)
+            cur_item = dict(applied_to=j["id"], x=j["x"], y=j["y"],
+                            angle=0, value=0, type="Force", id="tmp")
             break
     # specify angle and value
     while True:
         m = yield
         if m["action"] == "move":
-            old = truss.find_by_id("")
-            angle = 180 - degrees(atan2(old["y"] - m["y"], old["x"] - m["x"]))
-            new = {**old, "angle": angle}
+            truss_view.delete("tmp")
+            angle = 180 - degrees(atan2(cur_item["y"] - m["y"],
+                                        cur_item["x"] - m["x"]))
+            cur_item = {**cur_item, "angle": angle}
+            truss_view.create_item(cur_item)
         elif m["action"] in ("click", "item click"):
             set_state("default")
             value = askfloat("Force value", "Please enter force value",
                              initialvalue=0, parent=root)
-            new = {**old, "value": float(value or 0),
-                   "id": truss.get_new_id("Force")}
-        truss.replace(old, new)
+            cur_item = {**cur_item, "value": float(value or 0),
+                        "id": truss.get_new_id("Force")}
+            truss.append(cur_item)
 
 def calculate():
     try:

@@ -32,22 +32,22 @@ class TrussView(Canvas):
         self.bind("<Motion>", self.on_mouse_move)
         self.__truss = truss
         self.__scale = self.__get_optimal_scale()
-        self.__selected = None
+        self.__highlighted = None
         self.__observer_callbacks = []
         self.refresh()
 
     def update_truss(self, message):
         if message["action"] == "truss modified":
-            self.selected = None
+            self.highlighted = None
             self.refresh()
 
     @property
-    def selected(self):
-        return self.__selected
+    def highlighted(self):
+        return self.__highlighted
 
-    @selected.setter
-    def selected(self, item):
-        self.__selected = item
+    @highlighted.setter
+    def highlighted(self, item):
+        self.__highlighted = item
         self.refresh()
 
     def refresh(self):
@@ -55,7 +55,7 @@ class TrussView(Canvas):
         self.__scale = self.__get_optimal_scale()
         for i in self.__truss.items:
             self.create_item(i)
-        self.highlight_active()
+        self.highlight()
         for i in ("Force", "PinJoint", "PinnedSupport", "RollerSupport"):
             self.tag_raise(i)
 
@@ -77,9 +77,9 @@ class TrussView(Canvas):
         color = self.FORCE_COLOR if i["type"] == "Force" else self.LINE_COLOR
         create(i, color, self.ACTIVE_COLOR)
 
-    def highlight_active(self):
-        if self.selected:
-            for i in self.find_withtag(self.selected["id"]):
+    def highlight(self):
+        if self.highlighted:
+            for i in self.find_withtag(self.highlighted["id"]):
                 self.itemconfig(i, fill=self.HIGHLIGHT_COLOR, activefill="")
 
     def create_circle(self, x, y, radius, color, activefill, tags):

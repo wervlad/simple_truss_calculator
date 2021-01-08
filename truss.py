@@ -103,7 +103,7 @@ class Truss:
     def save_as(self, filename):
         def drop_cache(items):
             return tuple({f: i[f] for f in self.MANDATORY_FIELDS[i["type"]]}
-                         for i in items if i["id"])
+                         for i in items)
 
         with open(filename, "w") as f:
             f.write(json.dumps(drop_cache(self.items)))
@@ -125,7 +125,7 @@ class Truss:
         return items[0] if items else None
 
     def find_by_type(self, item_type):
-        return (i for i in self.items if i["type"] == item_type and i["id"])
+        return (i for i in self.items if i["type"] == item_type)
 
     def get_new_id(self, item_type):
         def extract_index(item_id):
@@ -138,7 +138,7 @@ class Truss:
 
     @property
     def joints(self):
-        return (i for i in self.items if i["type"] in self.JOINTS and i["id"])
+        return (i for i in self.items if i["type"] in self.JOINTS)
 
     def linked_beams(self, joint):
         return tuple(beam for beam in self.find_by_type("Beam")
