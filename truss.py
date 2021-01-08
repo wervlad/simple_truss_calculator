@@ -48,19 +48,18 @@ class Truss:
             self.__notify(dict(action="invalid items removed", items=invalid))
 
     def __update_cache(self):
-        for item in self.items:
-            if item["type"] == "Beam":
-                joint1 = self.find_by_id(item["end1"])
-                joint2 = self.find_by_id(item["end2"])
-                item.update(dict(x1=joint1["x"], y1=joint1["y"],
-                                 x2=joint2["x"], y2=joint2["y"]))
-            if item["type"] == "Force":
-                joint = self.find_by_id(item["applied_to"])
-                item.update(dict(x=joint["x"], y=joint["y"]))
+        for beam in self.find_by_type("Beam"):
+            end1 = self.find_by_id(beam["end1"])
+            end2 = self.find_by_id(beam["end2"])
+            beam.update(dict(x1=end1["x"], y1=end1["y"],
+                             x2=end2["x"], y2=end2["y"]))
+        for force in self.find_by_type("Force"):
+            joint = self.find_by_id(force["applied_to"])
+            force.update(dict(x=joint["x"], y=joint["y"]))
 
     def __update_dimensions(self):
-        xs = tuple(filter(None.__ne__, (item.get("x") for item in self.items)))
-        ys = tuple(filter(None.__ne__, (item.get("y") for item in self.items)))
+        xs = tuple(j["x"] for j in self.joints)
+        ys = tuple(j["y"] for j in self.joints)
         self.__left = min(xs, default=0)
         self.__right = max(xs, default=0)
         self.__bottom = min(ys, default=0)
@@ -126,7 +125,7 @@ class Truss:
         return items[0] if items else None
 
     def find_by_type(self, item_type):
-        return tuple(filter(lambda x: x["type"] == item_type, self.items))
+        return (i for i in self.items if i["type"] == item_type and i["id"])
 
     def get_new_id(self, item_type):
         def extract_index(item_id):
@@ -139,7 +138,7 @@ class Truss:
 
     @property
     def joints(self):
-        return tuple(filter(lambda x: x["type"] in self.JOINTS, self.items))
+        return (i for i in self.items if i["type"] in self.JOINTS and i["id"])
 
     def linked_beams(self, joint):
         return tuple(beam for beam in self.find_by_type("Beam")

@@ -29,11 +29,12 @@ class TrussView(Canvas):
         super().__init__(master, bg=self.BACKGROUND_COLOR)
         self.bind("<Button-1>", self.on_click)
         self.bind('<Configure>', lambda _: self.refresh())
+        self.bind("<Motion>", self.on_mouse_move)
         self.__truss = truss
         self.__scale = self.__get_optimal_scale()
         self.__selected = None
-        self.refresh()
         self.__observer_callbacks = []
+        self.refresh()
 
     def update_truss(self, message):
         if message["action"] == "truss modified":
@@ -179,6 +180,13 @@ class TrussView(Canvas):
             x = self.canvasx(event.x)
             y = self.canvasy(event.y)
             self.__notify(dict(action="click", x=x, y=y))
+
+    def on_mouse_move(self, e):
+        rx = (e.x - self.X_OFFSET) / self.__scale
+        x = rx + self.__truss.left
+        ry = (int(self.winfo_height()) - self.Y_OFFSET - e.y) / self.__scale
+        y = ry + self.__truss.bottom
+        self.__notify(dict(action="move", x=x, y=y))
 
     def __notify(self, message):
         for callback in self.__observer_callbacks:
