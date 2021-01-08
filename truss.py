@@ -36,10 +36,13 @@ class Truss:
         self.__update_dimensions()
         self.__notify(dict(action="truss modified"))
 
+    def __iter__(self):
+        return iter(self.__items)
+
     def __remove_invalid(self):
         invalid_beams = tuple(b for b in self.find_by_type("Beam")
-                              if (self.find_by_id(b["end1"]) is None or
-                                  self.find_by_id(b["end2"]) is None))
+                              if None in (self.find_by_id(b["end1"]),
+                                          self.find_by_id(b["end2"])))
         invalid_forces = tuple(f for f in self.find_by_type("Force")
                                if self.find_by_id(f["applied_to"]) is None)
         invalid = invalid_beams + invalid_forces

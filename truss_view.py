@@ -27,13 +27,10 @@ class TrussView(Canvas):
 
     def __init__(self, master, truss):
         super().__init__(master, bg=self.BACKGROUND_COLOR)
-        self.bind("<Button-1>", self.on_click)
         self.bind('<Configure>', lambda _: self.refresh())
-        self.bind("<Motion>", self.on_mouse_move)
         self.__truss = truss
         self.__scale = self.__get_optimal_scale()
         self.__highlighted = None
-        self.__observer_callbacks = []
         self.refresh()
 
     def update_truss(self, message):
@@ -53,14 +50,11 @@ class TrussView(Canvas):
     def refresh(self):
         self.delete("all")
         self.__scale = self.__get_optimal_scale()
-        for i in self.__truss.items:
+        for i in self.__truss:
             self.create_item(i)
         self.highlight()
         for i in ("Force", "PinJoint", "PinnedSupport", "RollerSupport"):
             self.tag_raise(i)
-
-    def append_observer_callback(self, callback):
-        self.__observer_callbacks.append(callback)
 
     def __get_optimal_scale(self):
         width = self.__truss.width
@@ -144,7 +138,7 @@ class TrussView(Canvas):
                          arrow=LAST, fill=color, activefill=activecolor)
 
     def create_labels(self):
-        for item in self.__truss.items:
+        for item in self.__truss:
             if item["type"] != "PinJoint":
                 self.create_label(item)
 
@@ -171,23 +165,9 @@ class TrussView(Canvas):
         canvas_y = int(self.winfo_height()) - self.Y_OFFSET - ry * self.__scale
         return canvas_x, canvas_y
 
-    def on_click(self, event):
-        items_under_cursor = self.find_withtag("current")
-        if items_under_cursor:
-            i = self.__truss.find_by_id(self.gettags(items_under_cursor[0])[1])
-            self.__notify(dict(action="item click", item=i))
-        else:
-            x = self.canvasx(event.x)
-            y = self.canvasy(event.y)
-            self.__notify(dict(action="click", x=x, y=y))
-
-    def on_mouse_move(self, e):
-        rx = (e.x - self.X_OFFSET) / self.__scale
-        x = rx + self.__truss.left
-        ry = (int(self.winfo_height()) - self.Y_OFFSET - e.y) / self.__scale
-        y = ry + self.__truss.bottom
-        self.__notify(dict(action="move", x=x, y=y))
-
-    def __notify(self, message):
-        for callback in self.__observer_callbacks:
-            callback(message)
+    def to_truss_pos(self, x, y):
+        rx = (x - self.X_OFFSET) / self.__scale
+        truss_x = rx + self.__truss.left
+        ry = (int(self.winfo_height()) - self.Y_OFFSET - y) / self.__scale
+        truss_y = ry + self.__truss.bottom
+        return truss_x, truss_y

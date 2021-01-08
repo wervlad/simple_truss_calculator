@@ -18,7 +18,6 @@ root = Tk()
 truss = Truss()
 truss_view = TrussView(root, truss)
 left_panel = Frame(root)
-images = {}
 state = None
 
 def main():
@@ -35,6 +34,7 @@ def main():
                            "pinJoint": lambda: set_state("pj"),
                            "beam": lambda: set_state("beam"),
                            "force": lambda: set_state("force")})
+    images = {}
     for i, f in buttons.items():
         images[i] = PhotoImage(file=f"img/{i}.gif")  # prevent GC
         Button(toolbar, image=images[i], relief=FLAT, command=f
@@ -43,11 +43,26 @@ def main():
     left_panel.pack(side=LEFT, fill=Y)
     truss_view.pack(expand=YES, fill=BOTH)
     root.bind("<Delete>", lambda _: state.send(dict(action="delete")))
+    truss_view.bind("<Button-1>", on_click)
+    truss_view.bind("<Motion>", on_mouse_move)
     set_state("default")
     truss.append_observer_callback(truss_view.update_truss)
     truss.append_observer_callback(truss_update)
-    truss_view.append_observer_callback(lambda m: state.send(m))
     root.mainloop()
+
+def on_click(event):
+    items_under_cursor = truss_view.find_withtag("current")
+    if items_under_cursor:
+        i = truss.find_by_id(truss_view.gettags(items_under_cursor[0])[1])
+        state.send(dict(action="item click", item=i))
+    else:
+        x = truss_view.canvasx(event.x)
+        y = truss_view.canvasy(event.y)
+        state.send(dict(action="click", x=x, y=y))
+
+def on_mouse_move(e):
+    x, y = truss_view.to_truss_pos(e.x, e.y)
+    state.send(dict(action="move", x=x, y=y))
 
 def set_state(new_state):
     global state
@@ -298,6 +313,7 @@ def load():
                                title="Load Truss")
     if filename:
         try:
+            set_state("default")
             truss.load_from(filename)
         except IOError as error:
             showerror("Failed to load data", error)
