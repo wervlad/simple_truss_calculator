@@ -43,6 +43,7 @@ def main():
     left_panel.pack(side=LEFT, fill=Y)
     truss_view.pack(expand=YES, fill=BOTH)
     root.bind("<Delete>", lambda _: state.send(dict(action="delete")))
+    root.bind('<Escape>', lambda _: cancel())
     truss_view.bind("<Button-1>", on_click)
     truss_view.bind("<Motion>", on_mouse_move)
     set_state("default")
@@ -50,19 +51,22 @@ def main():
     truss.append_observer_callback(truss_update)
     root.mainloop()
 
-def on_click(event):
+def on_click(_):
     items_under_cursor = truss_view.find_withtag("current")
     if items_under_cursor:
         i = truss.find_by_id(truss_view.gettags(items_under_cursor[0])[1])
-        state.send(dict(action="item click", item=i))
+        msg = dict(action="item click", item=i) if i else dict(action="click")
+        state.send(msg)
     else:
-        x = truss_view.canvasx(event.x)
-        y = truss_view.canvasy(event.y)
-        state.send(dict(action="click", x=x, y=y))
+        state.send(dict(action="click"))
 
-def on_mouse_move(e):
-    x, y = truss_view.to_truss_pos(e.x, e.y)
-    state.send(dict(action="move", x=x, y=y))
+def on_mouse_move(event):
+    x, y = truss_view.to_truss_pos(event.x, event.y)
+    try:
+        state.send(dict(action="move", x=x, y=y))
+    except ValueError as e:
+        if str(e) != "generator already executing":
+            raise e
 
 def set_state(new_state):
     global state
@@ -82,113 +86,98 @@ def process_default():
     while True:
         msg = yield
         if msg["action"] == "item click":
-            truss_view.highlighted = cur_item = msg["item"]
-            globals()[camel_to_snake(cur_item["type"])](**cur_item)
+            truss_view.highlighted = i = msg["item"]
+            globals()[camel_to_snake(i["type"])](**i)
         elif msg["action"] == "click":
-            truss_view.highlighted = cur_item = None
+            truss_view.highlighted = i = None
             clear_left_panel()
         elif msg["action"] == "delete":
-            truss.remove(cur_item)
-            truss_view.highlighted = cur_item = None
+            truss.remove(i)
+            truss_view.highlighted = i = None
 
 def process_pj():
     while True:
         msg = yield
         if msg["action"] == "move":
-            truss_view.delete("tmp")
-            cur_item = dict(x=msg["x"], y=msg["y"], type="PinJoint", id="tmp")
-            truss_view.create_item(cur_item)
-        elif msg["action"] == "item click":
-            set_state("default")
-            cur_item = {**cur_item, "id": truss.get_new_id("PinJoint")}
-            truss.append(cur_item)
+            i = dict(x=msg["x"], y=msg["y"], type="PinJoint")
+            update_temporary_item(i)
+        elif msg["action"] in ("click", "item click"):
+            replace(None, i)
 
 def process_ps():
     while True:
         msg = yield
         if msg["action"] == "move":
-            truss_view.delete("tmp")
-            cur_item = dict(x=msg["x"], y=msg["y"],
-                            type="PinnedSupport", id="tmp")
-            truss_view.create_item(cur_item)
-        elif msg["action"] == "item click":
-            set_state("default")
-            cur_item = {**cur_item, "id": truss.get_new_id("PinnedSupport")}
-            truss.append(cur_item)
+            i = dict(x=msg["x"], y=msg["y"], type="PinnedSupport")
+            update_temporary_item(i)
+        elif msg["action"] in ("click", "item click"):
+            replace(None, i)
 
 def process_rs():
     # specify position
     while True:
         msg = yield
         if msg["action"] == "move":
-            truss_view.delete("tmp")
-            cur_item = dict(x=msg["x"], y=msg["y"],
-                            angle=90, type="RollerSupport", id="tmp")
-            truss_view.create_item(cur_item)
-        elif msg["action"] == "item click":
+            i = dict(x=msg["x"], y=msg["y"], type="RollerSupport", angle=90)
+            update_temporary_item(i)
+        elif msg["action"] in ("click", "item click"):
             break
     # specify angle
     while True:
         msg = yield
         if msg["action"] == "move":
-            truss_view.delete("tmp")
-            angle = degrees(atan2(cur_item["y"] - msg["y"],
-                                  cur_item["x"] - msg["x"]))
-            cur_item = {**cur_item, "angle": angle}
-            truss_view.create_item(cur_item)
+            i["angle"] = degrees(atan2(i["y"] - msg["y"], i["x"] - msg["x"]))
+            update_temporary_item(i)
         elif msg["action"] in ("click", "item click"):
-            set_state("default")
-            cur_item = {**cur_item, "id": truss.get_new_id("RollerSupport")}
-            truss.append(cur_item)
+            replace(None, i)
 
 def process_beam():
     # specify 1st end
     while True:
         m = yield
+        beam(type="Beam")
         if m["action"] == "item click" and m["item"]["type"] in truss.JOINTS:
             j = m["item"]
-            cur_item = dict(x1=j["x"], y1=j["y"], x2=j["x"], y2=j["y"],
-                            end1=j["id"], type="Beam", id="tmp")
+            i = dict(end1=j["id"], x1=j["x"], y1=j["y"], type="Beam")
             break
     # specify 2nd end
     while True:
         m = yield
         if m["action"] == "move":
-            truss_view.delete("tmp")
-            cur_item = {**cur_item, "x2": m["x"], "y2": m["y"]}
-            truss_view.create_item(cur_item)
-            truss_view.tag_lower("tmp")
-        elif m["action"] == "item click" and m["item"] and m["item"]["type"] in truss.JOINTS:
-            set_state("default")
-            j = m["item"]
-            cur_item = {**cur_item, "end2": j["id"], "id": truss.get_new_id("Beam")}
-            truss.append(cur_item)
+            i = {**i, "x2": m["x"], "y2": m["y"]}
+            update_temporary_item(i)
+            truss_view.tag_lower("temporary")
+        elif m["action"] == "item click" and m["item"]["type"] in truss.JOINTS:
+            i["end2"] = m["item"]["id"]
+            replace(None, i)
 
 def process_force():
     # specify application
     while True:
         m = yield
+        force(type="Force")
         if m["action"] == "item click" and m["item"]["type"] in truss.JOINTS:
             j = m["item"]
-            cur_item = dict(applied_to=j["id"], x=j["x"], y=j["y"],
-                            angle=0, value=0, type="Force", id="tmp")
+            i = dict(applied_to=j["id"], x=j["x"], y=j["y"], type="Force")
             break
     # specify angle and value
     while True:
         m = yield
         if m["action"] == "move":
-            truss_view.delete("tmp")
-            angle = 180 - degrees(atan2(cur_item["y"] - m["y"],
-                                        cur_item["x"] - m["x"]))
-            cur_item = {**cur_item, "angle": angle}
-            truss_view.create_item(cur_item)
+            i["angle"] = 180 - degrees(atan2(i["y"] - m["y"], i["x"] - m["x"]))
+            update_temporary_item(i)
         elif m["action"] in ("click", "item click"):
-            set_state("default")
-            value = askfloat("Force value", "Please enter force value",
-                             initialvalue=0, parent=root)
-            cur_item = {**cur_item, "value": float(value or 0),
-                        "id": truss.get_new_id("Force")}
-            truss.append(cur_item)
+            i["value"] = askfloat("Force value", "Please enter force value",
+                                  initialvalue=0, parent=root)
+            if i["value"]:
+                replace(None, i)
+            else:
+                cancel()
+
+def update_temporary_item(i):
+    globals()[camel_to_snake(i["type"])](**i)
+    truss_view.delete("temporary")
+    truss_view.create_item({**i, "id": "temporary"})
 
 def calculate():
     try:
@@ -228,84 +217,75 @@ def clear_left_panel():
         child.destroy()
     Frame(left_panel).grid()  # hide left panel
 
-def add(item):
-    clear_left_panel()
-    truss.append(item)
+def cancel():
+    set_state("default")
 
 def replace(old, new):
-    clear_left_panel()
+    set_state("default")
+    new["id"] = new.get("id", truss.get_new_id_for(new["type"]))
     truss.replace(old, new)
 
 def beam(**b):
-    def new_beam():
-        return dict(end1=values["End 1"].get(), end2=values["End 2"].get(),
-                    type="Beam", id=values["ID"].get())
+    def ok():
+        new = dict(end1=values["End 1"].get(), end2=values["End 2"].get(),
+                   type="Beam", id=values["ID"].get())
+        replace(b, new)
 
-    nodes = [n["id"] for n in truss.joints]
-    if not nodes:
-        nodes.append("")
-    item_id = b.get("id", truss.get_new_id("Beam"))
-    params = [{"name": "ID", "value": item_id, "editable": False},
+    nodes = tuple(n["id"] for n in truss.joints) + ("",)
+    params = [{"name": b["type"], "value": b.get("id"), "editable": False},
               {"name": "End 1", "value": b.get("end1"), "values": nodes},
               {"name": "End 2", "value": b.get("end2"), "values": nodes}]
-    ok = (lambda: replace(b, new_beam())) if b else (lambda: add(new_beam()))
-    values = create_params_grid(params, ok, clear_left_panel)
+    values = create_params_grid(params, ok, cancel)
 
 def pinned_support(**ps):
-    def new_ps():
-        return dict(x=float(values["X"].get()), y=float(values["Y"].get()),
-                    type="PinnedSupport", id=values["ID"].get())
+    def ok():
+        new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
+                   type="PinnedSupport", id=values["ID"].get())
+        replace(ps, new)
 
-    item_id = ps.get("id", truss.get_new_id("PinnedSupport"))
-    params = [{"name": "ID", "value": item_id, "editable": False},
+    params = [{"name": ps["type"], "value": ps.get("id"), "editable": False},
               {"name": "X", "value": ps.get("x", 0), "editable": True},
               {"name": "Y", "value": ps.get("y", 0), "editable": True}]
-    ok = (lambda: replace(ps, new_ps())) if ps else (lambda: add(new_ps()))
-    values = create_params_grid(params, ok, clear_left_panel)
+    values = create_params_grid(params, ok, cancel)
 
 def roller_support(**rs):
-    def new_rs():
-        return dict(x=float(values["X"].get()), y=float(values["Y"].get()),
-                    angle=float(values["Angle"].get()), type="RollerSupport",
-                    id=values["ID"].get())
+    def ok():
+        new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
+                   angle=float(values["Angle"].get()), type="RollerSupport",
+                   id=values["ID"].get())
+        replace(rs, new)
 
-    item_id = rs.get("id", truss.get_new_id("RollerSupport"))
-    params = [{"name": "ID", "value": item_id, "editable": False},
+    params = [{"name": rs["type"], "value": rs.get("id"), "editable": False},
               {"name": "X", "value": rs.get("x", 0), "editable": True},
               {"name": "Y", "value": rs.get("y", 0), "editable": True},
               {"name": "Angle", "value": rs.get("angle", 0), "editable": True}]
-    ok = (lambda: replace(rs, new_rs())) if rs else (lambda: add(new_rs()))
-    values = create_params_grid(params, ok, clear_left_panel)
+    values = create_params_grid(params, ok, cancel)
 
 def pin_joint(**pj):
-    def new_pj():
-        return dict(x=float(values["X"].get()), y=float(values["Y"].get()),
-                    type="PinJoint", id=values["ID"].get())
+    def ok():
+        new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
+                   type="PinJoint", id=values["ID"].get())
+        replace(pj, new)
 
-    item_id = pj.get("id", truss.get_new_id("PinJoint"))
-    params = [{"name": "ID", "value": item_id, "editable": False},
+    params = [{"name": pj["type"], "value": pj.get("id"), "editable": False},
               {"name": "X", "value": pj.get("x", 0), "editable": True},
               {"name": "Y", "value": pj.get("y", 0), "editable": True}]
-    ok = (lambda: replace(pj, new_pj())) if pj else (lambda: add(new_pj()))
-    values = create_params_grid(params, ok, clear_left_panel)
+    values = create_params_grid(params, ok, cancel)
 
 def force(**f):
-    def new_force():
-        return dict(id=values["ID"].get(), value=float(values["Value"].get()),
-                    applied_to=values["Applied to"].get(),
-                    angle=float(values["Angle"].get()), type="Force")
+    def ok():
+        new = dict(id=values["ID"].get(), value=float(values["Value"].get()),
+                   applied_to=values["Applied to"].get(),
+                   angle=float(values["Angle"].get()), type="Force")
+        replace(f, new)
 
-    nodes = [n["id"] for n in truss.joints]
-    if not nodes:
-        nodes.append("")
-    item_id = f.get("id", truss.get_new_id("Force"))
+    nodes = tuple(n["id"] for n in truss.joints) + ("",)
     params = [
-        {"name": "ID", "value": item_id, "editable": False},
+        {"name": f["type"], "value": f.get("id"), "editable": False},
         {"name": "Applied to", "value": f.get("applied_to"), "values": nodes},
         {"name": "Value", "value": f.get("value", 0), "editable": True},
         {"name": "Angle", "value": f.get("angle", 0), "editable": True}]
-    ok = (lambda: replace(f, new_force())) if f else (lambda: add(new_force()))
-    values = create_params_grid(params, ok, clear_left_panel)
+    values = create_params_grid(params, ok, cancel)
 
 def load():
     filename = askopenfilename(defaultextension=".json",

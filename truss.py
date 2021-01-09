@@ -130,7 +130,7 @@ class Truss:
     def find_by_type(self, item_type):
         return (i for i in self.items if i["type"] == item_type)
 
-    def get_new_id(self, item_type):
+    def get_new_id_for(self, item_type):
         def extract_index(item_id):
             return int(re.findall(r'\d+', item_id)[0])
 
