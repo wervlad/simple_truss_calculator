@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import os
 from unittest import TestCase
-from truss import Truss
+from domain import Truss
 
 TEST_FILENAME = "truss.json"
 

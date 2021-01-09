@@ -141,7 +141,11 @@ class Truss:
 
     @property
     def joints(self):
-        return (i for i in self.items if i["type"] in self.JOINTS)
+        return (i for i in self.items if self.is_joint(i))
+
+    @classmethod
+    def is_joint(cls, item):
+        return item.get("type") in cls.JOINTS
 
     def linked_beams(self, joint):
         return tuple(beam for beam in self.find_by_type("Beam")

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3.7
 # -*- coding: utf-8 -*-
 from cmath import exp
-from math import radians
+from math import atan2, degrees, radians
 from tkinter import Canvas, LAST
 from misc import camel_to_snake
+from domain import Truss
 
 
 def rotate(center, target, angle):
@@ -150,7 +151,7 @@ class TrussView(Canvas):
         if i["type"] == "Force":
             x, y = self.to_canvas_pos(i["x"], i["y"])
             x, y = rotate((x, y), (x + self.FORCE_LENGTH / 2, y), i["angle"])
-        if i["type"] in self.__truss.JOINTS:
+        if Truss.is_joint(i):
             x, y = self.to_canvas_pos(i["x"], i["y"])
         t = self.create_text(x, y, text=i["id"], tags="Label", font="Arial 10",
                              fill=self.LABEL_COLOR)
@@ -171,3 +172,120 @@ class TrussView(Canvas):
         ry = (int(self.winfo_height()) - self.Y_OFFSET - y) / self.__scale
         truss_y = ry + self.__truss.bottom
         return truss_x, truss_y
+
+
+class TrussEditState:
+    """This is FSM for truss editing GUI."""
+    def __init__(self):
+        self.__state = None
+        self.__observer_callbacks = []
+        self.set_state("default")
+
+    def set_state(self, new_state):
+        self.__state = getattr(self, f"process_{new_state}")()
+        next(self.__state)
+
+    def send(self, message):
+        try:
+            self.__state.send(message)
+        except ValueError as e:
+            if str(e) != "generator already executing":
+                raise e
+
+    def process_default(self):
+        while True:
+            m = yield
+            if m["action"] == "item click":
+                i = m["item"]
+                self.__notify(dict(action="select", item=i))
+            elif m["action"] == "click":
+                self.__notify(dict(action="deselect"))
+                i = None
+            elif m["action"] == "delete":
+                self.__notify(dict(action="delete", item=i))
+                i = None
+
+    def process_pj(self):
+        while True:
+            m = yield
+            if m["action"] == "move":
+                i = dict(x=m["x"], y=m["y"], type="PinJoint")
+                self.__notify(dict(action="update tmp", item=i))
+            elif m["action"] in ("click", "item click"):
+                self.__notify(dict(action="create new", item=i))
+
+    def process_ps(self):
+        while True:
+            m = yield
+            if m["action"] == "move":
+                i = dict(x=m["x"], y=m["y"], type="PinnedSupport")
+                self.__notify(dict(action="update tmp", item=i))
+            elif m["action"] in ("click", "item click"):
+                self.__notify(dict(action="create new", item=i))
+
+    def process_rs(self):
+        # specify position
+        while True:
+            m = yield
+            if m["action"] == "move":
+                i = dict(x=m["x"], y=m["y"], type="RollerSupport", angle=90)
+                self.__notify(dict(action="update tmp", item=i))
+            elif m["action"] in ("click", "item click"):
+                break
+        # specify angle
+        while True:
+            m = yield
+            if m["action"] == "move":
+                i["angle"] = degrees(atan2(i["y"] - m["y"], i["x"] - m["x"]))
+                self.__notify(dict(action="update tmp", item=i))
+            elif m["action"] in ("click", "item click"):
+                self.__notify(dict(action="create new", item=i))
+
+    def process_beam(self):
+        # specify 1st end
+        while True:
+            m = yield
+            if m["action"] == "move":
+                i = dict(x1=0, y1=0, x2=0, y2=0, type="Beam")
+                self.__notify(dict(action="update tmp", item=i))
+            if (m["action"] == "item click" and Truss.is_joint(m["item"])):
+                j = m["item"]
+                i = dict(end1=j["id"], x1=j["x"], y1=j["y"], type="Beam")
+                break
+        # specify 2nd end
+        while True:
+            m = yield
+            if m["action"] == "move":
+                i = {**i, "x2": m["x"], "y2": m["y"]}
+                self.__notify(dict(action="update tmp", item=i))
+            elif (m["action"] == "item click" and Truss.is_joint(m["item"])):
+                i["end2"] = m["item"]["id"]
+                self.__notify(dict(action="create new", item=i))
+
+    def process_force(self):
+        # specify application
+        while True:
+            m = yield
+            if m["action"] == "move":
+                i = dict(x=m["x"], y=m["y"], angle=-45, type="Force")
+                self.__notify(dict(action="update tmp", item=i))
+            if (m["action"] == "item click" and Truss.is_joint(m["item"])):
+                j = m["item"]
+                i = dict(applied_to=j["id"], x=j["x"], y=j["y"], type="Force")
+                break
+        # specify angle
+        while True:
+            m = yield
+            if m["action"] == "move":
+                i["angle"] = 180 - degrees(atan2(i["y"] - m["y"],
+                                                 i["x"] - m["x"]))
+                self.__notify(dict(action="update tmp", item=i))
+            elif m["action"] in ("click", "item click"):
+                self.__notify(dict(action="create force", item=i))
+
+    def __notify(self, message):
+        for callback in self.__observer_callbacks:
+            callback(message)
+
+    def append_observer_callback(self, callback):
+        self.__observer_callbacks.append(callback)
