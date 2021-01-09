@@ -1,14 +1,13 @@
 #!/usr/bin/env python3.7
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
-from tkinter import (Button, Entry, Frame, Label, OptionMenu, PhotoImage,
-                     StringVar, Tk, BOTH, FLAT, LEFT, RAISED, TOP, E, N,
-                     S, W, X, Y, YES)
+from tkinter import (Button, Frame, PhotoImage, Tk,
+                     BOTH, FLAT, LEFT, RAISED, TOP, X, Y, YES)
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter.messagebox import showerror
 from tkinter.simpledialog import askfloat
 from domain import Truss
-from view import TrussView, TrussEditState
+from view import TrussView, TrussEditState, PropertyEditor
 from misc import camel_to_snake
 
 
@@ -16,7 +15,7 @@ from misc import camel_to_snake
 root = Tk()
 truss = Truss()
 truss_view = TrussView(root, truss)
-left_panel = Frame(root)
+property_editor = PropertyEditor(root)
 state = TrussEditState()
 
 def main():
@@ -33,13 +32,13 @@ def main():
                            "pinJoint": lambda: state.set_state("pj"),
                            "beam": lambda: state.set_state("beam"),
                            "force": lambda: state.set_state("force")})
-    images = {}
+    images = {}  # variable exists until root.mainloop() is running
     for i, f in buttons.items():
         images[i] = PhotoImage(file=f"img/{i}.gif")  # prevent GC
         Button(toolbar, image=images[i], relief=FLAT, command=f
                ).pack(side=LEFT, padx=2, pady=2)
     toolbar.pack(side=TOP, fill=X)
-    left_panel.pack(side=LEFT, fill=Y)
+    property_editor.pack(side=LEFT, fill=Y)
     truss_view.pack(expand=YES, fill=BOTH)
     root.bind("<Delete>", lambda _: state.send(dict(action="delete")))
     root.bind('<Escape>', lambda _: cancel())
@@ -68,7 +67,7 @@ def truss_update(msg):
         invalid = ", ".join(f"{i['type']} {i['id']}" for i in msg["items"])
         showerror("Warning", f"Invalid items were removed: {invalid}")
     elif msg["action"] == "truss modified":
-        clear_left_panel()
+        property_editor.clear()
 
 def state_update(msg):
     i = msg.get("item")
@@ -76,9 +75,9 @@ def state_update(msg):
     if action == "select":
         truss_view.highlighted = i
         globals()[camel_to_snake(i["type"])](**i)
-    if action == "cancel":
+    if action == "deselect":
         truss_view.highlighted = None
-        clear_left_panel()
+        property_editor.clear()
     if action == "delete":
         truss.remove(i)
         truss_view.highlighted = None
@@ -100,46 +99,21 @@ def state_update(msg):
             cancel()
 
 def calculate():
+    state.set_state("default")
     try:
         results = truss.calculate()
         params = [{"name": "Force", "value": "Value", "editable": False}]
         for n, v in results.items():
             params.append({"name": n, "value": f"{v:>.4f}", "editable": False})
-        create_params_grid(params, clear_left_panel, clear_left_panel)
+        property_editor.create(params, cancel, cancel)
         truss_view.create_labels()
     except ValueError as e:
         showerror("Calculate", e)
 
-def create_params_grid(params, ok, cancel):
-    clear_left_panel()
-    options = dict(padx=5, pady=5, sticky=W+E+N+S)
-    variables = {}
-    for i, p in enumerate(params):
-        name = p["name"]
-        Label(left_panel, text=name).grid(column=0, row=i, **options)
-        variables[name] = StringVar(value=p["value"])
-        if p.get("values") is None:
-            if p.get("editable"):
-                w = Entry(left_panel, textvariable=variables[name])
-            else:
-                w = Label(left_panel, text=p["value"])
-        else:
-            w = OptionMenu(left_panel, variables[name], *p["values"])
-        w.grid(column=1, row=i, **options)
-    i += 1
-    Button(left_panel, text="OK", command=ok).grid(column=0, row=i, **options)
-    Button(left_panel, text="Cancel", command=cancel
-           ).grid(column=1, row=i, **options)
-    return variables
-
-def clear_left_panel():
-    for child in left_panel.winfo_children():
-        child.destroy()
-    Frame(left_panel).grid()  # hide left panel
-
 def cancel():
     state.set_state("default")
-    clear_left_panel()
+    truss_view.highlighted = None
+    property_editor.clear()
 
 def replace(old, new):
     state.set_state("default")
@@ -157,7 +131,7 @@ def beam(**b):
     params = [{"name": b["type"], "value": b.get("id"), "editable": False},
               {"name": "End 1", "value": b.get("end1"), "values": nodes},
               {"name": "End 2", "value": b.get("end2"), "values": nodes}]
-    values = create_params_grid(params, ok, cancel)
+    values = property_editor.create(params, ok, cancel)
 
 def pinned_support(**ps):
     def ok():
@@ -168,7 +142,7 @@ def pinned_support(**ps):
     params = [{"name": ps["type"], "value": ps.get("id"), "editable": False},
               {"name": "X", "value": ps.get("x", 0), "editable": True},
               {"name": "Y", "value": ps.get("y", 0), "editable": True}]
-    values = create_params_grid(params, ok, cancel)
+    values = property_editor.create(params, ok, cancel)
 
 def roller_support(**rs):
     def ok():
@@ -181,7 +155,7 @@ def roller_support(**rs):
               {"name": "X", "value": rs.get("x", 0), "editable": True},
               {"name": "Y", "value": rs.get("y", 0), "editable": True},
               {"name": "Angle", "value": rs.get("angle", 0), "editable": True}]
-    values = create_params_grid(params, ok, cancel)
+    values = property_editor.create(params, ok, cancel)
 
 def pin_joint(**pj):
     def ok():
@@ -192,7 +166,7 @@ def pin_joint(**pj):
     params = [{"name": pj["type"], "value": pj.get("id"), "editable": False},
               {"name": "X", "value": pj.get("x", 0), "editable": True},
               {"name": "Y", "value": pj.get("y", 0), "editable": True}]
-    values = create_params_grid(params, ok, cancel)
+    values = property_editor.create(params, ok, cancel)
 
 def force(**f):
     def ok():
@@ -208,7 +182,7 @@ def force(**f):
         {"name": "Applied to", "value": f.get("applied_to"), "values": nodes},
         {"name": "Value", "value": f.get("value", 0), "editable": True},
         {"name": "Angle", "value": f.get("angle", 0), "editable": True}]
-    values = create_params_grid(params, ok, cancel)
+    values = property_editor.create(params, ok, cancel)
 
 def load():
     filename = askopenfilename(defaultextension=".json",

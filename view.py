@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 from cmath import exp
 from math import atan2, degrees, radians
-from tkinter import Canvas, LAST
+from tkinter import (Button, Canvas, Entry, Frame, Label, OptionMenu,
+                     StringVar, LAST, E, N, S, W)
 from misc import camel_to_snake
 from domain import Truss
 
@@ -193,13 +194,14 @@ class TrussEditState:
                 raise e
 
     def process_default(self):
+        i = None
         while True:
             m = yield
             if m["action"] == "item click":
                 i = m["item"]
                 self.__notify(dict(action="select", item=i))
             elif m["action"] == "click":
-                self.__notify(dict(action="deselect"))
+                self.__notify(dict(action="deselect", item=i))
                 i = None
             elif m["action"] == "delete":
                 self.__notify(dict(action="delete", item=i))
@@ -289,3 +291,35 @@ class TrussEditState:
 
     def append_observer_callback(self, callback):
         self.__observer_callbacks.append(callback)
+
+
+class PropertyEditor(Frame):
+    def __init__(self, master):
+        super().__init__(master)
+
+    def create(self, properties, ok, cancel):
+        self.clear()
+        options = dict(padx=5, pady=5, sticky=W+E+N+S)
+        variables = {}
+        for i, p in enumerate(properties):
+            name = p["name"]
+            Label(self, text=name).grid(column=0, row=i, **options)
+            variables[name] = StringVar(value=p["value"])
+            if p.get("values") is None:
+                if p.get("editable"):
+                    w = Entry(self, textvariable=variables[name])
+                else:
+                    w = Label(self, text=p["value"])
+            else:
+                w = OptionMenu(self, variables[name], *p["values"])
+            w.grid(column=1, row=i, **options)
+        i += 1
+        Button(self, text="OK", command=ok).grid(column=0, row=i, **options)
+        Button(self, text="Cancel", command=cancel
+               ).grid(column=1, row=i, **options)
+        return variables
+
+    def clear(self):
+        for child in self.winfo_children():
+            child.destroy()
+        Frame(self).grid()  # hack to hide empty instance
