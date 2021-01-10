@@ -14,7 +14,7 @@ from view import TrussView, TrussEditState, TrussPropertyEditor
 root = Tk()
 truss = Truss()
 truss_view = TrussView(root, truss)
-property_editor = TrussPropertyEditor(root)
+property_editor = TrussPropertyEditor(root, truss)
 state = TrussEditState()
 
 def main():
@@ -39,7 +39,7 @@ def main():
     toolbar.pack(side=TOP, fill=X)
     property_editor.pack(side=LEFT, fill=Y)
     truss_view.pack(expand=YES, fill=BOTH)
-    root.bind("<Delete>", lambda _: state.send(dict(action="delete")))
+    root.bind("<Delete>", lambda _: state.process(dict(action="delete")))
     root.bind('<Escape>', lambda _: state_update(dict(action="cancel")))
     truss_view.bind("<Button-1>", on_click)
     truss_view.bind("<Motion>", on_mouse_move)
@@ -54,13 +54,13 @@ def on_click(_):
     if items_under_cursor:
         i = truss.find_by_id(truss_view.gettags(items_under_cursor[0])[1])
         msg = dict(action="item click", item=i) if i else dict(action="click")
-        state.send(msg)
+        state.process(msg)
     else:
-        state.send(dict(action="click"))
+        state.process(dict(action="click"))
 
 def on_mouse_move(event):
     x, y = truss_view.to_truss_pos(event.x, event.y)
-    state.send(dict(action="move", x=x, y=y))
+    state.process(dict(action="move", x=x, y=y))
 
 def truss_update(msg):
     if msg["action"] == "invalid items removed":
@@ -70,33 +70,31 @@ def truss_update(msg):
         property_editor.clear()
 
 def state_update(msg):
-    i = msg.get("item")
+    item = msg.get("item")
+    truss_view.selected = item
     action = msg.get("action")
     if action == "select":
-        truss_view.highlighted = i
-        property_editor.show_properties(truss, i)
+        property_editor.show_properties(item)
     if action == "cancel":
         state.set_state("default")
-        truss_view.highlighted = None
         property_editor.clear()
     if action == "delete":
-        truss.remove(i)
-        truss_view.highlighted = None
+        truss.remove(item)
     if action == "update tmp":
-        property_editor.show_properties(truss, i)
+        property_editor.show_properties(item)
         truss_view.delete("temporary")
-        truss_view.create_item({**i, "id": "temporary"})
+        truss_view.create_item({**item, "id": "temporary"})
         truss_view.tag_lower("temporary")
     if action in ("create new", "replace"):
         state.set_state("default")
-        if not i.get("id"):
-            i["id"] = truss.get_new_id_for(i["type"])
-        truss.replace(msg.get("old"), i)
+        if not item.get("id"):
+            item["id"] = truss.get_new_id_for(item["type"])
+        truss.replace(msg.get("old"), item)
     if action == "create force":
-        i["value"] = askfloat("Force value", "Please enter force value",
+        item["value"] = askfloat("Force value", "Please enter force value",
                               initialvalue=0, parent=root)
-        action = "create new" if i["value"] else "cancel"
-        state_update(dict(action=action, item=i))
+        action = "create new" if item["value"] else "cancel"
+        state_update(dict(action=action, item=item))
 
 def calculate():
     state.set_state("default")

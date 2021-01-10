@@ -1,19 +1,10 @@
 #!/usr/bin/env python3.7
 # -*- coding: utf-8 -*-
-from cmath import exp
-from math import atan2, degrees, radians
+from math import atan2, degrees
 from tkinter import (Button, Canvas, Entry, Frame, Label, OptionMenu,
                      StringVar, LAST, E, N, S, W)
-from misc import camel_to_snake, Observable
+from misc import camel_to_snake, rotate, Observable
 from domain import Truss
-
-
-def rotate(center, target, angle):
-    ccenter = complex(*center)
-    ctarget = complex(*target)
-    cangle = exp(radians(angle) * 1j)
-    ret = (ctarget - ccenter) * cangle + ccenter
-    return ret.real, ret.imag
 
 
 class TrussView(Canvas):
@@ -32,31 +23,32 @@ class TrussView(Canvas):
         self.bind('<Configure>', lambda _: self.refresh())
         self.__truss = truss
         self.__scale = self.__get_optimal_scale()
-        self.__highlighted = None
+        self.__selected = None
         self.refresh()
 
     def update_truss(self, message):
         if message["action"] == "truss modified":
-            self.highlighted = None
+            self.selected = None
             self.refresh()
 
     @property
-    def highlighted(self):
-        return self.__highlighted
+    def selected(self):
+        return self.__selected
 
-    @highlighted.setter
-    def highlighted(self, item):
-        self.__highlighted = item
-        self.refresh()
+    @selected.setter
+    def selected(self, item):
+        self.dehighlight(self.__selected)
+        self.__selected = item
+        self.highlight(self.__selected)
 
     def refresh(self):
         self.delete("all")
         self.__scale = self.__get_optimal_scale()
         for i in self.__truss:
             self.create_item(i)
-        self.highlight()
         for i in ("Force", "PinJoint", "PinnedSupport", "RollerSupport"):
             self.tag_raise(i)
+        self.highlight(self.selected)
 
     def __get_optimal_scale(self):
         width = self.__truss.width
@@ -70,13 +62,20 @@ class TrussView(Canvas):
 
     def create_item(self, i):
         create = getattr(self, f"create_{camel_to_snake(i['type'])}")
-        color = self.FORCE_COLOR if i["type"] == "Force" else self.LINE_COLOR
-        create(i, color, self.ACTIVE_COLOR)
+        create(i, self.get_color(i), self.ACTIVE_COLOR)
 
-    def highlight(self):
-        if self.highlighted:
-            for i in self.find_withtag(self.highlighted["id"]):
-                self.itemconfig(i, fill=self.HIGHLIGHT_COLOR, activefill="")
+    def get_color(self, item):
+        return self.FORCE_COLOR if item["type"] == "Force" else self.LINE_COLOR
+
+    def highlight(self, item):
+        if item:
+            self.itemconfig(item.get("id"), activefill="",
+                            fill=self.HIGHLIGHT_COLOR)
+
+    def dehighlight(self, item):
+        if item:
+            self.itemconfig(item.get("id"), fill=self.get_color(item),
+                            activefill=self.ACTIVE_COLOR)
 
     def create_circle(self, x, y, radius, color, activefill, tags):
         self.create_oval(x - radius, y - radius, x + radius, y + radius,
@@ -180,110 +179,103 @@ class TrussEditState(Observable):
     def __init__(self):
         super().__init__()
         self.__state = None
+        self.__item = None
         self.set_state("default")
 
     def set_state(self, new_state):
-        self.__state = getattr(self, f"process_{new_state}")()
-        next(self.__state)
+        self.__item = None
+        self.__state = getattr(self, f"process_{new_state}")
 
-    def send(self, message):
-        try:
-            self.__state.send(message)
-        except ValueError as e:
-            if str(e) != "generator already executing":
-                raise e
+    def process(self, message):
+        self.__state(message)
 
-    def process_default(self):
-        i = None
-        while True:
-            m = yield
-            if m["action"] == "item click":
-                i = m["item"]
-                self.notify(dict(action="select", item=i))
-            elif m["action"] == "click":
-                self.notify(dict(action="cancel", item=i))
-                i = None
-            elif m["action"] == "delete":
-                self.notify(dict(action="delete", item=i))
-                i = None
+    def process_default(self, m):
+        if m["action"] == "item click":
+            self.__item = m["item"]
+            self.notify(dict(action="select", item=self.__item))
+        elif m["action"] == "click":
+            self.notify(dict(action="cancel"))
+            self.__item = None
+        elif m["action"] == "delete":
+            self.notify(dict(action="delete", item=self.__item))
+            self.__item = None
 
-    def process_pj(self):
-        while True:
-            m = yield
-            if m["action"] == "move":
-                i = dict(x=m["x"], y=m["y"], type="PinJoint")
-                self.notify(dict(action="update tmp", item=i))
-            elif m["action"] in ("click", "item click"):
-                self.notify(dict(action="create new", item=i))
+    def process_pj(self, m):
+        if m["action"] == "move":
+            self.__item = dict(x=m["x"], y=m["y"], type="PinJoint")
+            self.notify(dict(action="update tmp", item=self.__item))
+        elif m["action"] in ("click", "item click"):
+            self.notify(dict(action="create new", item=self.__item))
 
-    def process_ps(self):
-        while True:
-            m = yield
-            if m["action"] == "move":
-                i = dict(x=m["x"], y=m["y"], type="PinnedSupport")
-                self.notify(dict(action="update tmp", item=i))
-            elif m["action"] in ("click", "item click"):
-                self.notify(dict(action="create new", item=i))
+    def process_ps(self, m):
+        if m["action"] == "move":
+            self.__item = dict(x=m["x"], y=m["y"], type="PinnedSupport")
+            self.notify(dict(action="update tmp", item=self.__item))
+        elif m["action"] in ("click", "item click"):
+            self.notify(dict(action="create new", item=self.__item))
 
-    def process_rs(self):
-        # specify position
-        while True:
-            m = yield
-            if m["action"] == "move":
-                i = dict(x=m["x"], y=m["y"], type="RollerSupport", angle=90)
-                self.notify(dict(action="update tmp", item=i))
-            elif m["action"] in ("click", "item click"):
-                break
-        # specify angle
-        while True:
-            m = yield
-            if m["action"] == "move":
-                i["angle"] = degrees(atan2(i["y"] - m["y"], i["x"] - m["x"]))
-                self.notify(dict(action="update tmp", item=i))
-            elif m["action"] in ("click", "item click"):
-                self.notify(dict(action="create new", item=i))
+    def process_rs(self, m):
+        self.__state = self.specify_rs_position
+        self.process(m)
 
-    def process_beam(self):
-        # specify 1st end
-        while True:
-            m = yield
-            if m["action"] == "move":
-                i = dict(x1=0, y1=0, x2=0, y2=0, type="Beam")
-                self.notify(dict(action="update tmp", item=i))
-            if (m["action"] == "item click" and Truss.is_joint(m["item"])):
-                j = m["item"]
-                i = dict(end1=j["id"], x1=j["x"], y1=j["y"], type="Beam")
-                break
-        # specify 2nd end
-        while True:
-            m = yield
-            if m["action"] == "move":
-                i = {**i, "x2": m["x"], "y2": m["y"]}
-                self.notify(dict(action="update tmp", item=i))
-            elif (m["action"] == "item click" and Truss.is_joint(m["item"])):
-                i["end2"] = m["item"]["id"]
-                self.notify(dict(action="create new", item=i))
+    def specify_rs_position(self, m):
+        if m["action"] == "move":
+            self.__item = dict(x=m["x"], y=m["y"], angle=90,
+                               type="RollerSupport")
+            self.notify(dict(action="update tmp", item=self.__item))
+        elif m["action"] in ("click", "item click"):
+            self.__state = self.specify_rs_angle
 
-    def process_force(self):
-        # specify application
-        while True:
-            m = yield
-            if m["action"] == "move":
-                i = dict(x=m["x"], y=m["y"], angle=-45, type="Force")
-                self.notify(dict(action="update tmp", item=i))
-            if (m["action"] == "item click" and Truss.is_joint(m["item"])):
-                j = m["item"]
-                i = dict(applied_to=j["id"], x=j["x"], y=j["y"], type="Force")
-                break
-        # specify angle
-        while True:
-            m = yield
-            if m["action"] == "move":
-                i["angle"] = 180 - degrees(atan2(i["y"] - m["y"],
-                                                 i["x"] - m["x"]))
-                self.notify(dict(action="update tmp", item=i))
-            elif m["action"] in ("click", "item click"):
-                self.notify(dict(action="create force", item=i))
+    def specify_rs_angle(self, m):
+        if m["action"] == "move":
+            self.__item["angle"] = degrees(atan2(self.__item["y"] - m["y"],
+                                                 self.__item["x"] - m["x"]))
+            self.notify(dict(action="update tmp", item=self.__item))
+        elif m["action"] in ("click", "item click"):
+            self.notify(dict(action="create new", item=self.__item))
+
+    def process_beam(self, m):
+        self.__state = self.specify_beam_end1
+        self.process(m)
+
+    def specify_beam_end1(self, m):
+        if m["action"] == "move":
+            self.__item = dict(x1=0, y1=0, x2=0, y2=0, type="Beam")
+            self.notify(dict(action="update tmp", item=self.__item))
+        if (m["action"] == "item click" and Truss.is_joint(m["item"])):
+            j = m["item"]
+            self.__item = dict(end1=j["id"], x1=j["x"], y1=j["y"], type="Beam")
+            self.__state = self.specify_beam_end2
+
+    def specify_beam_end2(self, m):
+        if m["action"] == "move":
+            self.__item = {**self.__item, "x2": m["x"], "y2": m["y"]}
+            self.notify(dict(action="update tmp", item=self.__item))
+        elif (m["action"] == "item click" and Truss.is_joint(m["item"])):
+            self.__item["end2"] = m["item"]["id"]
+            self.notify(dict(action="create new", item=self.__item))
+
+    def process_force(self, m):
+        self.__state = self.specify_force_application
+        self.process(m)
+
+    def specify_force_application(self, m):
+        if m["action"] == "move":
+            self.__item = dict(x=m["x"], y=m["y"], angle=-45, type="Force")
+            self.notify(dict(action="update tmp", item=self.__item))
+        if (m["action"] == "item click" and Truss.is_joint(m["item"])):
+            j = m["item"]
+            self.__item = dict(applied_to=j["id"], x=j["x"], y=j["y"],
+                               type="Force")
+            self.__state = self.specify_force_angle
+
+    def specify_force_angle(self, m):
+        if m["action"] == "move":
+            self.__item["angle"] = 180 - degrees(atan2(
+                self.__item["y"] - m["y"], self.__item["x"] - m["x"]))
+            self.notify(dict(action="update tmp", item=self.__item))
+        elif m["action"] in ("click", "item click"):
+            self.notify(dict(action="create force", item=self.__item))
 
 
 class PropertyEditor(Frame):
@@ -317,26 +309,27 @@ class PropertyEditor(Frame):
 
 
 class TrussPropertyEditor(PropertyEditor, Observable):
-    def __init__(self, master):
+    def __init__(self, master, truss):
         PropertyEditor.__init__(self, master)
         Observable.__init__(self)
+        self.__truss = truss
 
-    def show_properties(self, truss, item):
-        getattr(self, camel_to_snake(item["type"]))(truss, item)
+    def show_properties(self, item):
+        getattr(self, camel_to_snake(item["type"]))(item)
 
-    def beam(self, truss, b):
+    def beam(self, b):
         def ok():
             new = dict(end1=values["End 1"].get(), end2=values["End 2"].get(),
                        type="Beam", id=values["Beam"].get())
             self.replace(b, new)
 
-        nodes = tuple(n["id"] for n in truss.joints) + ("",)
+        nodes = tuple(n["id"] for n in self.__truss.joints) + ("",)
         ps = [{"name": b["type"], "value": b.get("id"), "editable": False},
               {"name": "End 1", "value": b.get("end1"), "values": nodes},
               {"name": "End 2", "value": b.get("end2"), "values": nodes}]
         values = self.create(properties=ps, ok=ok, cancel=self.cancel)
 
-    def pinned_support(self, _, ps):
+    def pinned_support(self, ps):
         def ok():
             new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
                        type="PinnedSupport", id=values["PinnedSupport"].get())
@@ -347,7 +340,7 @@ class TrussPropertyEditor(PropertyEditor, Observable):
               {"name": "Y", "value": ps.get("y", 0), "editable": True}]
         values = self.create(properties=ps, ok=ok, cancel=self.cancel)
 
-    def roller_support(self, _, rs):
+    def roller_support(self, rs):
         def ok():
             new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
                        id=values["RollerSupport"].get(), type="RollerSupport",
@@ -360,7 +353,7 @@ class TrussPropertyEditor(PropertyEditor, Observable):
               {"name": "Angle", "value": rs.get("angle", 0), "editable": True}]
         values = self.create(properties=ps, ok=ok, cancel=self.cancel)
 
-    def pin_joint(self, _, pj):
+    def pin_joint(self, pj):
         def ok():
             new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
                        type="PinJoint", id=values["PinJoint"].get())
@@ -371,7 +364,7 @@ class TrussPropertyEditor(PropertyEditor, Observable):
               {"name": "Y", "value": pj.get("y", 0), "editable": True}]
         values = self.create(properties=ps, ok=ok, cancel=self.cancel)
 
-    def force(self, truss, f):
+    def force(self, f):
         def ok():
             new = dict(id=values["Force"].get(),
                        value=float(values["Value"].get()),
@@ -379,7 +372,7 @@ class TrussPropertyEditor(PropertyEditor, Observable):
                        angle=float(values["Angle"].get()), type="Force")
             self.replace(f, new)
 
-        js = tuple(n["id"] for n in truss.joints) + ("",)
+        js = tuple(n["id"] for n in self.__truss.joints) + ("",)
         ps = [
             {"name": f["type"], "value": f.get("id"), "editable": False},
             {"name": "Applied to", "value": f.get("applied_to"), "values": js},
