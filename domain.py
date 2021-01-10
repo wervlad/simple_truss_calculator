@@ -5,9 +5,10 @@ from math import atan2, cos, sin, radians
 import json
 import re
 import numpy
+from misc import Observable
 
 
-class Truss:
+class Truss(Observable):
     JOINTS = ("PinJoint", "PinnedSupport", "RollerSupport")
     MANDATORY_FIELDS = dict(
         PinJoint=("type", "id", "x", "y"),
@@ -17,12 +18,12 @@ class Truss:
         Force=("type", "id", "angle", "applied_to", "value"))
 
     def __init__(self):
+        super().__init__()
         self.__items = ()
         self.__left = 0
         self.__right = 0
         self.__bottom = 0
         self.__top = 0
-        self.__observer_callbacks = []
 
     @property
     def items(self):
@@ -34,7 +35,7 @@ class Truss:
         self.__remove_invalid()
         self.__update_cache()
         self.__update_dimensions()
-        self.__notify(dict(action="truss modified"))
+        self.notify(dict(action="truss modified"))
 
     def __iter__(self):
         return iter(self.__items)
@@ -48,7 +49,7 @@ class Truss:
         invalid = invalid_beams + invalid_forces
         if invalid:
             self.__items = tuple(i for i in self.items if i not in invalid)
-            self.__notify(dict(action="invalid items removed", items=invalid))
+            self.notify(dict(action="invalid items removed", items=invalid))
 
     def __update_cache(self):
         for beam in self.find_by_type("Beam"):
@@ -68,10 +69,6 @@ class Truss:
         self.__bottom = min(ys, default=0)
         self.__top = max(ys, default=0)
 
-    def __notify(self, message):
-        for callback in self.__observer_callbacks:
-            callback(message)
-
     @property
     def left(self):
         return self.__left
@@ -87,9 +84,6 @@ class Truss:
     @property
     def top(self):
         return self.__top
-
-    def append_observer_callback(self, callback):
-        self.__observer_callbacks.append(callback)
 
     def new(self):
         self.items = ()
