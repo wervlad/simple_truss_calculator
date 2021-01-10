@@ -26,11 +26,11 @@ def main():
                            "labels": truss_view.create_labels,
                            "refresh": truss_view.refresh,
                            "calculate": calculate,
-                           "pinnedSupport": lambda: state.set_state("ps"),
-                           "rollerSupport": lambda: state.set_state("rs"),
-                           "pinJoint": lambda: state.set_state("pj"),
-                           "beam": lambda: state.set_state("beam"),
-                           "force": lambda: state.set_state("force")})
+                           "pinnedSupport": lambda: state.set_to("ps"),
+                           "rollerSupport": lambda: state.set_to("rs"),
+                           "pinJoint": lambda: state.set_to("pj"),
+                           "beam": lambda: state.set_to("beam"),
+                           "force": lambda: state.set_to("force")})
     images = {}  # variable exists until root.mainloop() is running
     for i, f in buttons.items():
         images[i] = PhotoImage(file=f"img/{i}.gif")  # prevent GC
@@ -39,13 +39,12 @@ def main():
     toolbar.pack(side=TOP, fill=X)
     property_editor.pack(side=LEFT, fill=Y)
     truss_view.pack(expand=YES, fill=BOTH)
-    root.bind("<Delete>", lambda _: state.process(dict(action="delete")))
+    root.bind("<Delete>", on_del_click)
     root.bind('<Escape>', lambda _: state_update(dict(action="cancel")))
     truss_view.bind("<Button-1>", on_click)
     truss_view.bind("<Motion>", on_mouse_move)
     truss.append_observer_callback(truss_view.update_truss)
     truss.append_observer_callback(truss_update)
-    state.append_observer_callback(state_update)
     property_editor.append_observer_callback(state_update)
     root.mainloop()
 
@@ -54,13 +53,16 @@ def on_click(_):
     if items_under_cursor:
         i = truss.find_by_id(truss_view.gettags(items_under_cursor[0])[1])
         msg = dict(action="item click", item=i) if i else dict(action="click")
-        state.process(msg)
     else:
-        state.process(dict(action="click"))
+        msg = dict(action="click")
+    state_update(state.process(msg))
+
+def on_del_click(_):
+    state_update(state.process(dict(action="delete")))
 
 def on_mouse_move(event):
     x, y = truss_view.to_truss_pos(event.x, event.y)
-    state.process(dict(action="move", x=x, y=y))
+    state_update(state.process(dict(action="move", x=x, y=y)))
 
 def truss_update(msg):
     if msg["action"] == "invalid items removed":
@@ -76,7 +78,7 @@ def state_update(msg):
     if action == "select":
         property_editor.show_properties(item)
     if action == "cancel":
-        state.set_state("default")
+        state.set_to("default")
         property_editor.clear()
     if action == "delete":
         truss.remove(item)
@@ -86,18 +88,18 @@ def state_update(msg):
         truss_view.create_item({**item, "id": "temporary"})
         truss_view.tag_lower("temporary")
     if action in ("create new", "replace"):
-        state.set_state("default")
+        state.set_to("default")
         if not item.get("id"):
             item["id"] = truss.get_new_id_for(item["type"])
         truss.replace(msg.get("old"), item)
     if action == "create force":
         item["value"] = askfloat("Force value", "Please enter force value",
-                              initialvalue=0, parent=root)
+                                 initialvalue=0, parent=root)
         action = "create new" if item["value"] else "cancel"
         state_update(dict(action=action, item=item))
 
 def calculate():
-    state.set_state("default")
+    state.set_to("default")
     try:
         property_editor.show_results(truss.calculate())
         truss_view.create_labels()
@@ -110,7 +112,7 @@ def load():
                                title="Load Truss")
     if filename:
         try:
-            state.set_state("default")
+            state.set_to("default")
             truss.load_from(filename)
         except IOError as error:
             showerror("Failed to load data", error)

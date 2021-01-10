@@ -174,108 +174,125 @@ class TrussView(Canvas):
         return truss_x, truss_y
 
 
-class TrussEditState(Observable):
+class TrussEditState():
     """This is FSM for truss editing GUI."""
     def __init__(self):
-        super().__init__()
-        self.__state = None
         self.__item = None
-        self.set_state("default")
+        self.__state = None
+        self.set_to("default")
 
-    def set_state(self, new_state):
+    def set_to(self, new_state):
         self.__item = None
         self.__state = getattr(self, f"process_{new_state}")
 
     def process(self, message):
-        self.__state(message)
+        return self.__state(message)
 
     def process_default(self, m):
+        ret = dict(item=self.__item)
         if m["action"] == "item click":
             self.__item = m["item"]
-            self.notify(dict(action="select", item=self.__item))
+            ret = dict(action="select", item=self.__item)
         elif m["action"] == "click":
-            self.notify(dict(action="cancel"))
             self.__item = None
+            ret = dict(action="cancel")
         elif m["action"] == "delete":
-            self.notify(dict(action="delete", item=self.__item))
+            ret = dict(action="delete", item=self.__item)
             self.__item = None
+        return ret
 
     def process_pj(self, m):
+        ret = dict(item=self.__item)
         if m["action"] == "move":
             self.__item = dict(x=m["x"], y=m["y"], type="PinJoint")
-            self.notify(dict(action="update tmp", item=self.__item))
+            ret = dict(action="update tmp", item=self.__item)
         elif m["action"] in ("click", "item click"):
-            self.notify(dict(action="create new", item=self.__item))
+            ret = dict(action="create new", item=self.__item)
+        return ret
 
     def process_ps(self, m):
+        ret = dict(item=self.__item)
         if m["action"] == "move":
             self.__item = dict(x=m["x"], y=m["y"], type="PinnedSupport")
-            self.notify(dict(action="update tmp", item=self.__item))
+            ret = dict(action="update tmp", item=self.__item)
         elif m["action"] in ("click", "item click"):
-            self.notify(dict(action="create new", item=self.__item))
+            ret = dict(action="create new", item=self.__item)
+        return ret
 
     def process_rs(self, m):
         self.__state = self.specify_rs_position
-        self.process(m)
+        return self.process(m)
 
     def specify_rs_position(self, m):
+        ret = dict(item=self.__item)
         if m["action"] == "move":
             self.__item = dict(x=m["x"], y=m["y"], angle=90,
                                type="RollerSupport")
-            self.notify(dict(action="update tmp", item=self.__item))
+            ret = dict(action="update tmp", item=self.__item)
         elif m["action"] in ("click", "item click"):
             self.__state = self.specify_rs_angle
+        return ret
 
     def specify_rs_angle(self, m):
+        ret = dict(item=self.__item)
         if m["action"] == "move":
             self.__item["angle"] = degrees(atan2(self.__item["y"] - m["y"],
                                                  self.__item["x"] - m["x"]))
-            self.notify(dict(action="update tmp", item=self.__item))
+            ret = dict(action="update tmp", item=self.__item)
         elif m["action"] in ("click", "item click"):
-            self.notify(dict(action="create new", item=self.__item))
+            ret = dict(action="create new", item=self.__item)
+        return ret
 
     def process_beam(self, m):
         self.__state = self.specify_beam_end1
-        self.process(m)
+        return self.process(m)
 
     def specify_beam_end1(self, m):
+        ret = dict(item=self.__item)
         if m["action"] == "move":
             self.__item = dict(x1=0, y1=0, x2=0, y2=0, type="Beam")
-            self.notify(dict(action="update tmp", item=self.__item))
+            ret = dict(action="update tmp", item=self.__item)
         if (m["action"] == "item click" and Truss.is_joint(m["item"])):
             j = m["item"]
             self.__item = dict(end1=j["id"], x1=j["x"], y1=j["y"], type="Beam")
             self.__state = self.specify_beam_end2
+        return ret
 
     def specify_beam_end2(self, m):
+        ret = dict(item=self.__item)
         if m["action"] == "move":
             self.__item = {**self.__item, "x2": m["x"], "y2": m["y"]}
-            self.notify(dict(action="update tmp", item=self.__item))
+            ret = dict(action="update tmp", item=self.__item)
         elif (m["action"] == "item click" and Truss.is_joint(m["item"])):
             self.__item["end2"] = m["item"]["id"]
-            self.notify(dict(action="create new", item=self.__item))
+            ret = dict(action="create new", item=self.__item)
+        return ret
 
     def process_force(self, m):
         self.__state = self.specify_force_application
-        self.process(m)
+        return self.process(m)
 
     def specify_force_application(self, m):
+        ret = dict(item=self.__item)
         if m["action"] == "move":
             self.__item = dict(x=m["x"], y=m["y"], angle=-45, type="Force")
-            self.notify(dict(action="update tmp", item=self.__item))
+            ret = dict(action="update tmp", item=self.__item)
         if (m["action"] == "item click" and Truss.is_joint(m["item"])):
             j = m["item"]
             self.__item = dict(applied_to=j["id"], x=j["x"], y=j["y"],
                                type="Force")
             self.__state = self.specify_force_angle
+        return ret
 
     def specify_force_angle(self, m):
+        ret = dict(item=self.__item)
         if m["action"] == "move":
             self.__item["angle"] = 180 - degrees(atan2(
                 self.__item["y"] - m["y"], self.__item["x"] - m["x"]))
-            self.notify(dict(action="update tmp", item=self.__item))
+            ret = dict(action="update tmp", item=self.__item)
         elif m["action"] in ("click", "item click"):
-            self.notify(dict(action="create force", item=self.__item))
+            ret = dict(action="create force", item=self.__item)
+        return ret
 
 
 class PropertyEditor(Frame):
