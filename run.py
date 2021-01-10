@@ -7,15 +7,14 @@ from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter.messagebox import showerror
 from tkinter.simpledialog import askfloat
 from domain import Truss
-from view import TrussView, TrussEditState, PropertyEditor
-from misc import camel_to_snake
+from view import TrussView, TrussEditState, TrussPropertyEditor
 
 
 # global variables
 root = Tk()
 truss = Truss()
 truss_view = TrussView(root, truss)
-property_editor = PropertyEditor(root)
+property_editor = TrussPropertyEditor(root)
 state = TrussEditState()
 
 def main():
@@ -41,12 +40,13 @@ def main():
     property_editor.pack(side=LEFT, fill=Y)
     truss_view.pack(expand=YES, fill=BOTH)
     root.bind("<Delete>", lambda _: state.send(dict(action="delete")))
-    root.bind('<Escape>', lambda _: cancel())
+    root.bind('<Escape>', lambda _: state_update(dict(action="cancel")))
     truss_view.bind("<Button-1>", on_click)
     truss_view.bind("<Motion>", on_mouse_move)
     truss.append_observer_callback(truss_view.update_truss)
     truss.append_observer_callback(truss_update)
     state.append_observer_callback(state_update)
+    property_editor.append_observer_callback(state_update)
     root.mainloop()
 
 def on_click(_):
@@ -74,115 +74,37 @@ def state_update(msg):
     action = msg.get("action")
     if action == "select":
         truss_view.highlighted = i
-        globals()[camel_to_snake(i["type"])](**i)
-    if action == "deselect":
+        property_editor.show_properties(truss, i)
+    if action == "cancel":
+        state.set_state("default")
         truss_view.highlighted = None
         property_editor.clear()
     if action == "delete":
         truss.remove(i)
         truss_view.highlighted = None
     if action == "update tmp":
-        globals()[camel_to_snake(i["type"])](**i)
+        property_editor.show_properties(truss, i)
         truss_view.delete("temporary")
         truss_view.create_item({**i, "id": "temporary"})
         truss_view.tag_lower("temporary")
-    if action == "create new":
+    if action in ("create new", "replace"):
         state.set_state("default")
-        replace(None, i)
+        if not i.get("id"):
+            i["id"] = truss.get_new_id_for(i["type"])
+        truss.replace(msg.get("old"), i)
     if action == "create force":
-        state.set_state("default")
         i["value"] = askfloat("Force value", "Please enter force value",
                               initialvalue=0, parent=root)
-        if i["value"]:
-            replace(None, i)
-        else:
-            cancel()
+        action = "create new" if i["value"] else "cancel"
+        state_update(dict(action=action, item=i))
 
 def calculate():
     state.set_state("default")
     try:
-        results = truss.calculate()
-        params = [{"name": "Force", "value": "Value", "editable": False}]
-        for n, v in results.items():
-            params.append({"name": n, "value": f"{v:>.4f}", "editable": False})
-        property_editor.create(params, cancel, cancel)
+        property_editor.show_results(truss.calculate())
         truss_view.create_labels()
     except ValueError as e:
         showerror("Calculate", e)
-
-def cancel():
-    state.set_state("default")
-    truss_view.highlighted = None
-    property_editor.clear()
-
-def replace(old, new):
-    state.set_state("default")
-    if not new.get("id"):
-        new["id"] = truss.get_new_id_for(new["type"])
-    truss.replace(old, new)
-
-def beam(**b):
-    def ok():
-        new = dict(end1=values["End 1"].get(), end2=values["End 2"].get(),
-                   type="Beam", id=values["Beam"].get())
-        replace(b, new)
-
-    nodes = tuple(n["id"] for n in truss.joints) + ("",)
-    params = [{"name": b["type"], "value": b.get("id"), "editable": False},
-              {"name": "End 1", "value": b.get("end1"), "values": nodes},
-              {"name": "End 2", "value": b.get("end2"), "values": nodes}]
-    values = property_editor.create(params, ok, cancel)
-
-def pinned_support(**ps):
-    def ok():
-        new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
-                   type="PinnedSupport", id=values["PinnedSupport"].get())
-        replace(ps, new)
-
-    params = [{"name": ps["type"], "value": ps.get("id"), "editable": False},
-              {"name": "X", "value": ps.get("x", 0), "editable": True},
-              {"name": "Y", "value": ps.get("y", 0), "editable": True}]
-    values = property_editor.create(params, ok, cancel)
-
-def roller_support(**rs):
-    def ok():
-        new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
-                   angle=float(values["Angle"].get()), type="RollerSupport",
-                   id=values["RollerSupport"].get())
-        replace(rs, new)
-
-    params = [{"name": rs["type"], "value": rs.get("id"), "editable": False},
-              {"name": "X", "value": rs.get("x", 0), "editable": True},
-              {"name": "Y", "value": rs.get("y", 0), "editable": True},
-              {"name": "Angle", "value": rs.get("angle", 0), "editable": True}]
-    values = property_editor.create(params, ok, cancel)
-
-def pin_joint(**pj):
-    def ok():
-        new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
-                   type="PinJoint", id=values["PinJoint"].get())
-        replace(pj, new)
-
-    params = [{"name": pj["type"], "value": pj.get("id"), "editable": False},
-              {"name": "X", "value": pj.get("x", 0), "editable": True},
-              {"name": "Y", "value": pj.get("y", 0), "editable": True}]
-    values = property_editor.create(params, ok, cancel)
-
-def force(**f):
-    def ok():
-        new = dict(id=values["Force"].get(),
-                   value=float(values["Value"].get()),
-                   applied_to=values["Applied to"].get(),
-                   angle=float(values["Angle"].get()), type="Force")
-        replace(f, new)
-
-    nodes = tuple(n["id"] for n in truss.joints) + ("",)
-    params = [
-        {"name": f["type"], "value": f.get("id"), "editable": False},
-        {"name": "Applied to", "value": f.get("applied_to"), "values": nodes},
-        {"name": "Value", "value": f.get("value", 0), "editable": True},
-        {"name": "Angle", "value": f.get("angle", 0), "editable": True}]
-    values = property_editor.create(params, ok, cancel)
 
 def load():
     filename = askopenfilename(defaultextension=".json",

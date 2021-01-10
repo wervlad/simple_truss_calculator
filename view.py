@@ -4,7 +4,7 @@ from cmath import exp
 from math import atan2, degrees, radians
 from tkinter import (Button, Canvas, Entry, Frame, Label, OptionMenu,
                      StringVar, LAST, E, N, S, W)
-from misc import camel_to_snake
+from misc import camel_to_snake, Observable
 from domain import Truss
 
 
@@ -175,11 +175,11 @@ class TrussView(Canvas):
         return truss_x, truss_y
 
 
-class TrussEditState:
+class TrussEditState(Observable):
     """This is FSM for truss editing GUI."""
     def __init__(self):
+        super().__init__()
         self.__state = None
-        self.__observer_callbacks = []
         self.set_state("default")
 
     def set_state(self, new_state):
@@ -199,12 +199,12 @@ class TrussEditState:
             m = yield
             if m["action"] == "item click":
                 i = m["item"]
-                self.__notify(dict(action="select", item=i))
+                self.notify(dict(action="select", item=i))
             elif m["action"] == "click":
-                self.__notify(dict(action="deselect", item=i))
+                self.notify(dict(action="cancel", item=i))
                 i = None
             elif m["action"] == "delete":
-                self.__notify(dict(action="delete", item=i))
+                self.notify(dict(action="delete", item=i))
                 i = None
 
     def process_pj(self):
@@ -212,18 +212,18 @@ class TrussEditState:
             m = yield
             if m["action"] == "move":
                 i = dict(x=m["x"], y=m["y"], type="PinJoint")
-                self.__notify(dict(action="update tmp", item=i))
+                self.notify(dict(action="update tmp", item=i))
             elif m["action"] in ("click", "item click"):
-                self.__notify(dict(action="create new", item=i))
+                self.notify(dict(action="create new", item=i))
 
     def process_ps(self):
         while True:
             m = yield
             if m["action"] == "move":
                 i = dict(x=m["x"], y=m["y"], type="PinnedSupport")
-                self.__notify(dict(action="update tmp", item=i))
+                self.notify(dict(action="update tmp", item=i))
             elif m["action"] in ("click", "item click"):
-                self.__notify(dict(action="create new", item=i))
+                self.notify(dict(action="create new", item=i))
 
     def process_rs(self):
         # specify position
@@ -231,7 +231,7 @@ class TrussEditState:
             m = yield
             if m["action"] == "move":
                 i = dict(x=m["x"], y=m["y"], type="RollerSupport", angle=90)
-                self.__notify(dict(action="update tmp", item=i))
+                self.notify(dict(action="update tmp", item=i))
             elif m["action"] in ("click", "item click"):
                 break
         # specify angle
@@ -239,9 +239,9 @@ class TrussEditState:
             m = yield
             if m["action"] == "move":
                 i["angle"] = degrees(atan2(i["y"] - m["y"], i["x"] - m["x"]))
-                self.__notify(dict(action="update tmp", item=i))
+                self.notify(dict(action="update tmp", item=i))
             elif m["action"] in ("click", "item click"):
-                self.__notify(dict(action="create new", item=i))
+                self.notify(dict(action="create new", item=i))
 
     def process_beam(self):
         # specify 1st end
@@ -249,7 +249,7 @@ class TrussEditState:
             m = yield
             if m["action"] == "move":
                 i = dict(x1=0, y1=0, x2=0, y2=0, type="Beam")
-                self.__notify(dict(action="update tmp", item=i))
+                self.notify(dict(action="update tmp", item=i))
             if (m["action"] == "item click" and Truss.is_joint(m["item"])):
                 j = m["item"]
                 i = dict(end1=j["id"], x1=j["x"], y1=j["y"], type="Beam")
@@ -259,10 +259,10 @@ class TrussEditState:
             m = yield
             if m["action"] == "move":
                 i = {**i, "x2": m["x"], "y2": m["y"]}
-                self.__notify(dict(action="update tmp", item=i))
+                self.notify(dict(action="update tmp", item=i))
             elif (m["action"] == "item click" and Truss.is_joint(m["item"])):
                 i["end2"] = m["item"]["id"]
-                self.__notify(dict(action="create new", item=i))
+                self.notify(dict(action="create new", item=i))
 
     def process_force(self):
         # specify application
@@ -270,7 +270,7 @@ class TrussEditState:
             m = yield
             if m["action"] == "move":
                 i = dict(x=m["x"], y=m["y"], angle=-45, type="Force")
-                self.__notify(dict(action="update tmp", item=i))
+                self.notify(dict(action="update tmp", item=i))
             if (m["action"] == "item click" and Truss.is_joint(m["item"])):
                 j = m["item"]
                 i = dict(applied_to=j["id"], x=j["x"], y=j["y"], type="Force")
@@ -281,27 +281,18 @@ class TrussEditState:
             if m["action"] == "move":
                 i["angle"] = 180 - degrees(atan2(i["y"] - m["y"],
                                                  i["x"] - m["x"]))
-                self.__notify(dict(action="update tmp", item=i))
+                self.notify(dict(action="update tmp", item=i))
             elif m["action"] in ("click", "item click"):
-                self.__notify(dict(action="create force", item=i))
-
-    def __notify(self, message):
-        for callback in self.__observer_callbacks:
-            callback(message)
-
-    def append_observer_callback(self, callback):
-        self.__observer_callbacks.append(callback)
+                self.notify(dict(action="create force", item=i))
 
 
 class PropertyEditor(Frame):
-    def __init__(self, master):
-        super().__init__(master)
-
     def create(self, properties, ok, cancel):
         self.clear()
         options = dict(padx=5, pady=5, sticky=W+E+N+S)
         variables = {}
-        for i, p in enumerate(properties):
+        i = 0
+        for p in properties:
             name = p["name"]
             Label(self, text=name).grid(column=0, row=i, **options)
             variables[name] = StringVar(value=p["value"])
@@ -313,7 +304,7 @@ class PropertyEditor(Frame):
             else:
                 w = OptionMenu(self, variables[name], *p["values"])
             w.grid(column=1, row=i, **options)
-        i += 1
+            i += 1
         Button(self, text="OK", command=ok).grid(column=0, row=i, **options)
         Button(self, text="Cancel", command=cancel
                ).grid(column=1, row=i, **options)
@@ -323,3 +314,87 @@ class PropertyEditor(Frame):
         for child in self.winfo_children():
             child.destroy()
         Frame(self).grid()  # hack to hide empty instance
+
+
+class TrussPropertyEditor(PropertyEditor, Observable):
+    def __init__(self, master):
+        PropertyEditor.__init__(self, master)
+        Observable.__init__(self)
+
+    def show_properties(self, truss, item):
+        getattr(self, camel_to_snake(item["type"]))(truss, item)
+
+    def beam(self, truss, b):
+        def ok():
+            new = dict(end1=values["End 1"].get(), end2=values["End 2"].get(),
+                       type="Beam", id=values["Beam"].get())
+            self.replace(b, new)
+
+        nodes = tuple(n["id"] for n in truss.joints) + ("",)
+        ps = [{"name": b["type"], "value": b.get("id"), "editable": False},
+              {"name": "End 1", "value": b.get("end1"), "values": nodes},
+              {"name": "End 2", "value": b.get("end2"), "values": nodes}]
+        values = self.create(properties=ps, ok=ok, cancel=self.cancel)
+
+    def pinned_support(self, _, ps):
+        def ok():
+            new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
+                       type="PinnedSupport", id=values["PinnedSupport"].get())
+            self.replace(ps, new)
+
+        ps = [{"name": ps["type"], "value": ps.get("id"), "editable": False},
+              {"name": "X", "value": ps.get("x", 0), "editable": True},
+              {"name": "Y", "value": ps.get("y", 0), "editable": True}]
+        values = self.create(properties=ps, ok=ok, cancel=self.cancel)
+
+    def roller_support(self, _, rs):
+        def ok():
+            new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
+                       id=values["RollerSupport"].get(), type="RollerSupport",
+                       angle=float(values["Angle"].get()))
+            self.replace(rs, new)
+
+        ps = [{"name": rs["type"], "value": rs.get("id"), "editable": False},
+              {"name": "X", "value": rs.get("x", 0), "editable": True},
+              {"name": "Y", "value": rs.get("y", 0), "editable": True},
+              {"name": "Angle", "value": rs.get("angle", 0), "editable": True}]
+        values = self.create(properties=ps, ok=ok, cancel=self.cancel)
+
+    def pin_joint(self, _, pj):
+        def ok():
+            new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
+                       type="PinJoint", id=values["PinJoint"].get())
+            self.replace(pj, new)
+
+        ps = [{"name": pj["type"], "value": pj.get("id"), "editable": False},
+              {"name": "X", "value": pj.get("x", 0), "editable": True},
+              {"name": "Y", "value": pj.get("y", 0), "editable": True}]
+        values = self.create(properties=ps, ok=ok, cancel=self.cancel)
+
+    def force(self, truss, f):
+        def ok():
+            new = dict(id=values["Force"].get(),
+                       value=float(values["Value"].get()),
+                       applied_to=values["Applied to"].get(),
+                       angle=float(values["Angle"].get()), type="Force")
+            self.replace(f, new)
+
+        js = tuple(n["id"] for n in truss.joints) + ("",)
+        ps = [
+            {"name": f["type"], "value": f.get("id"), "editable": False},
+            {"name": "Applied to", "value": f.get("applied_to"), "values": js},
+            {"name": "Value", "value": f.get("value", 0), "editable": True},
+            {"name": "Angle", "value": f.get("angle", 0), "editable": True}]
+        values = self.create(properties=ps, ok=ok, cancel=self.cancel)
+
+    def show_results(self, results):
+        ps = [{"name": "Force", "value": "Value", "editable": False}]
+        for n, v in results.items():
+            ps.append({"name": n, "value": f"{v:>.4f}", "editable": False})
+        self.create(properties=ps, ok=self.cancel, cancel=self.cancel)
+
+    def cancel(self):
+        self.notify(dict(action="cancel"))
+
+    def replace(self, old, new):
+        self.notify(dict(action="replace", old=old, item=new))
