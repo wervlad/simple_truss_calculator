@@ -7,7 +7,7 @@ from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter.messagebox import showerror
 from tkinter.simpledialog import askfloat
 from domain import Truss
-from view import TrussView, TrussEditState, TrussPropertyEditor
+from view import TrussView, ItemEditState, TrussPropertyEditor
 
 
 # global variables
@@ -15,7 +15,7 @@ root = Tk()
 truss = Truss()
 truss_view = TrussView(root, truss)
 property_editor = TrussPropertyEditor(root, truss)
-state = TrussEditState()
+state = ItemEditState()
 
 def main():
     root.title("Simple Truss Calculator")
@@ -26,11 +26,11 @@ def main():
                            "labels": truss_view.create_labels,
                            "refresh": truss_view.refresh,
                            "calculate": calculate,
-                           "pinnedSupport": lambda: state.set_to("ps"),
-                           "rollerSupport": lambda: state.set_to("rs"),
-                           "pinJoint": lambda: state.set_to("pj"),
-                           "beam": lambda: state.set_to("beam"),
-                           "force": lambda: state.set_to("force")})
+                           "pinnedSupport": lambda: state.new("PinnedSupport"),
+                           "rollerSupport": lambda: state.new("RollerSupport"),
+                           "pinJoint": lambda: state.new("PinJoint"),
+                           "beam": lambda: state.new("Beam"),
+                           "force": lambda: state.new("Force")})
     images = {}  # variable exists until root.mainloop() is running
     for i, f in buttons.items():
         images[i] = PhotoImage(file=f"img/{i}.gif")  # prevent GC
@@ -48,13 +48,14 @@ def main():
     property_editor.append_observer_callback(state_update)
     root.mainloop()
 
-def on_click(_):
+def on_click(event):
+    x, y = truss_view.to_truss_pos(event.x, event.y)
+    msg = dict(action="click", x=x, y=y)
     items_under_cursor = truss_view.find_withtag("current")
     if items_under_cursor:
-        i = truss.find_by_id(truss_view.gettags(items_under_cursor[0])[1])
-        msg = dict(action="item click", item=i) if i else dict(action="click")
-    else:
-        msg = dict(action="click")
+        item = truss.find_by_id(truss_view.gettags(items_under_cursor[0])[1])
+        if item:
+            msg.update(dict(action="item click", item=item))
     state_update(state.process(msg))
 
 def on_del_click(_):
@@ -78,7 +79,7 @@ def state_update(msg):
     if action == "select":
         property_editor.show_properties(item)
     if action == "cancel":
-        state.set_to("default")
+        state.default()
         property_editor.clear()
     if action == "delete":
         truss.remove(item)
@@ -88,18 +89,19 @@ def state_update(msg):
         truss_view.create_item({**item, "id": "temporary"})
         truss_view.tag_lower("temporary")
     if action in ("create new", "replace"):
-        state.set_to("default")
+        state.default()
         if not item.get("id"):
             item["id"] = truss.get_new_id_for(item["type"])
         truss.replace(msg.get("old"), item)
     if action == "create force":
-        item["value"] = askfloat("Force value", "Please enter force value",
-                                 initialvalue=0, parent=root)
+        if item.get("value") is None:
+            item["value"] = askfloat("Force value", "Please enter force value",
+                                     initialvalue=0, parent=root)
         action = "create new" if item["value"] else "cancel"
         state_update(dict(action=action, item=item))
 
 def calculate():
-    state.set_to("default")
+    state.default()
     try:
         property_editor.show_results(truss.calculate())
         truss_view.create_labels()
@@ -112,7 +114,7 @@ def load():
                                title="Load Truss")
     if filename:
         try:
-            state.set_to("default")
+            state.default()
             truss.load_from(filename)
         except IOError as error:
             showerror("Failed to load data", error)

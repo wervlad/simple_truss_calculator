@@ -174,125 +174,103 @@ class TrussView(Canvas):
         return truss_x, truss_y
 
 
-class TrussEditState():
-    """This is FSM for truss editing GUI."""
+class ItemEditState():
+    """This is FSM for item editing GUI."""
     def __init__(self):
         self.__item = None
-        self.__state = None
-        self.set_to("default")
+        self.__state = self._process_default
 
-    def set_to(self, new_state):
+    def default(self):
         self.__item = None
-        self.__state = getattr(self, f"process_{new_state}")
+        self.__state = self._process_default
+
+    def new(self, item_type):
+        self.__item = dict(type=item_type)
+        self.__state = self._edit_item
 
     def process(self, message):
         return self.__state(message)
 
-    def process_default(self, m):
+    def _process_default(self, msg):
         ret = dict(item=self.__item)
-        if m["action"] == "item click":
-            self.__item = m["item"]
+        if msg["action"] == "item click":
+            self.__item = msg["item"]
             ret = dict(action="select", item=self.__item)
-        elif m["action"] == "click":
+        elif msg["action"] == "click":
             self.__item = None
             ret = dict(action="cancel")
-        elif m["action"] == "delete":
+        elif msg["action"] == "delete":
             ret = dict(action="delete", item=self.__item)
             self.__item = None
         return ret
 
-    def process_pj(self, m):
-        ret = dict(item=self.__item)
-        if m["action"] == "move":
-            self.__item = dict(x=m["x"], y=m["y"], type="PinJoint")
-            ret = dict(action="update tmp", item=self.__item)
-        elif m["action"] in ("click", "item click"):
-            ret = dict(action="create new", item=self.__item)
-        return ret
+    def _edit_item(self, msg):
+        r = getattr(self, f"_edit_{camel_to_snake(self.__item['type'])}")(msg)
+        if r["action"] in ("create new", "create force"):
+            self.default()
+        return r
 
-    def process_ps(self, m):
-        ret = dict(item=self.__item)
-        if m["action"] == "move":
-            self.__item = dict(x=m["x"], y=m["y"], type="PinnedSupport")
-            ret = dict(action="update tmp", item=self.__item)
-        elif m["action"] in ("click", "item click"):
-            ret = dict(action="create new", item=self.__item)
-        return ret
+    def _edit_beam(self, msg):
+        if self.__item.get("end2") is None:
+            self.__item.update(dict(x2=msg["x"], y2=msg["y"]))
+        if self.__item.get("end1") is None:
+            return self._specify_node("end1", "x1", "y1", msg)
+        if self.__item.get("end2") is None:
+            return self._specify_node("end2", "x2", "y2", msg)
+        return dict(action="create new", item=self.__item)
 
-    def process_rs(self, m):
-        self.__state = self.specify_rs_position
-        return self.process(m)
+    def _edit_force(self, msg):
+        if self.__item.get("applied_to") is None:
+            ret = self._specify_node("applied_to", "x", "y", msg)
+            ret["item"] = {"angle": -45, **ret["item"]}
+            return ret
+        if self.__item.get("angle") is None:
+            ret = self._specify_angle(msg)
+            ret["item"]["angle"] = 180 - ret["item"]["angle"]
+            return ret
+        return dict(action="create force", item=self.__item)
 
-    def specify_rs_position(self, m):
-        ret = dict(item=self.__item)
-        if m["action"] == "move":
-            self.__item = dict(x=m["x"], y=m["y"], angle=90,
-                               type="RollerSupport")
-            ret = dict(action="update tmp", item=self.__item)
-        elif m["action"] in ("click", "item click"):
-            self.__state = self.specify_rs_angle
-        return ret
+    def _edit_pin_joint(self, msg):
+        if self.__item.get("x") is None or self.__item.get("y") is None:
+            return self._specify_pos(msg)
+        return dict(action="create new", item=self.__item)
 
-    def specify_rs_angle(self, m):
-        ret = dict(item=self.__item)
-        if m["action"] == "move":
-            self.__item["angle"] = degrees(atan2(self.__item["y"] - m["y"],
-                                                 self.__item["x"] - m["x"]))
-            ret = dict(action="update tmp", item=self.__item)
-        elif m["action"] in ("click", "item click"):
-            ret = dict(action="create new", item=self.__item)
-        return ret
+    def _edit_pinned_support(self, msg):
+        if self.__item.get("x") is None or self.__item.get("y") is None:
+            return self._specify_pos(msg)
+        return dict(action="create new", item=self.__item)
 
-    def process_beam(self, m):
-        self.__state = self.specify_beam_end1
-        return self.process(m)
+    def _edit_roller_support(self, msg):
+        if self.__item.get("x") is None or self.__item.get("y") is None:
+            ret = self._specify_pos(msg)
+            ret["item"] = {"angle": 90, **ret["item"]}
+            return ret
+        if self.__item.get("angle") is None:
+            return self._specify_angle(msg)
+        return dict(action="create new", item=self.__item)
 
-    def specify_beam_end1(self, m):
-        ret = dict(item=self.__item)
-        if m["action"] == "move":
-            self.__item = dict(x1=0, y1=0, x2=0, y2=0, type="Beam")
-            ret = dict(action="update tmp", item=self.__item)
-        if (m["action"] == "item click" and Truss.is_joint(m["item"])):
-            j = m["item"]
-            self.__item = dict(end1=j["id"], x1=j["x"], y1=j["y"], type="Beam")
-            self.__state = self.specify_beam_end2
-        return ret
+    def _specify_pos(self, msg):
+        item = {**self.__item, **dict(x=msg["x"], y=msg["y"])}
+        if msg["action"] in ("click", "item click"):
+            self.__item.update(dict(x=msg["x"], y=msg["y"]))
+            return self._edit_item({**msg, "action": "move"})
+        return dict(action="update tmp", item=item)
 
-    def specify_beam_end2(self, m):
-        ret = dict(item=self.__item)
-        if m["action"] == "move":
-            self.__item = {**self.__item, "x2": m["x"], "y2": m["y"]}
-            ret = dict(action="update tmp", item=self.__item)
-        elif (m["action"] == "item click" and Truss.is_joint(m["item"])):
-            self.__item["end2"] = m["item"]["id"]
-            ret = dict(action="create new", item=self.__item)
-        return ret
+    def _specify_angle(self, msg):
+        angle = degrees(atan2(self.__item["y"] - msg["y"],
+                              self.__item["x"] - msg["x"]))
+        if msg["action"] in ("click", "item click"):
+            self.__item["angle"] = angle
+            return self._edit_item({**msg, "action": "move"})
+        return dict(action="update tmp", item={**self.__item, "angle": angle})
 
-    def process_force(self, m):
-        self.__state = self.specify_force_application
-        return self.process(m)
-
-    def specify_force_application(self, m):
-        ret = dict(item=self.__item)
-        if m["action"] == "move":
-            self.__item = dict(x=m["x"], y=m["y"], angle=-45, type="Force")
-            ret = dict(action="update tmp", item=self.__item)
-        if (m["action"] == "item click" and Truss.is_joint(m["item"])):
-            j = m["item"]
-            self.__item = dict(applied_to=j["id"], x=j["x"], y=j["y"],
-                               type="Force")
-            self.__state = self.specify_force_angle
-        return ret
-
-    def specify_force_angle(self, m):
-        ret = dict(item=self.__item)
-        if m["action"] == "move":
-            self.__item["angle"] = 180 - degrees(atan2(
-                self.__item["y"] - m["y"], self.__item["x"] - m["x"]))
-            ret = dict(action="update tmp", item=self.__item)
-        elif m["action"] in ("click", "item click"):
-            ret = dict(action="create force", item=self.__item)
-        return ret
+    def _specify_node(self, node, x, y, msg):
+        self.__item.update({x: msg["x"], y: msg["y"]})
+        if msg["action"] == "item click" and Truss.is_joint(msg["item"]):
+            j = msg["item"]
+            self.__item.update({node: j["id"], x: j["x"], y: j["y"]})
+            return self._edit_item({**msg, "action": "move"})
+        return dict(action="update tmp", item=self.__item)
 
 
 class PropertyEditor(Frame):
