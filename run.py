@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.7
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from collections import OrderedDict
 from tkinter import (Button, Frame, PhotoImage, Tk,
@@ -16,9 +16,23 @@ truss = Truss()
 truss_view = TrussView(root, truss)
 property_editor = TrussPropertyEditor(root)
 state = ItemEditState()
+images = {}
 
 def main():
     root.title("Simple Truss Calculator")
+    toolbar = create_toolbar()
+    toolbar.pack(side=TOP, fill=X)
+    property_editor.pack(side=LEFT, fill=Y)
+    truss_view.pack(expand=YES, fill=BOTH)
+
+    bind_hotkeys()
+    truss.append_observer_callback(truss_view.update_truss)
+    truss.append_observer_callback(truss_update)
+    property_editor.append_observer_callback(state_update)
+
+    root.mainloop()
+
+def create_toolbar():
     toolbar = Frame(root, bd=1, relief=RAISED)
     buttons = OrderedDict({"new": truss.new,
                            "load": load,
@@ -33,22 +47,30 @@ def main():
                            "pinJoint": lambda: state.new("PinJoint"),
                            "beam": lambda: state.new("Beam"),
                            "force": lambda: state.new("Force")})
-    images = {}  # variable exists until root.mainloop() is running
     for i, f in buttons.items():
         images[i] = PhotoImage(file=f"img/{i}.gif")  # prevent GC
         Button(toolbar, image=images[i], relief=FLAT, command=f
                ).pack(side=LEFT, padx=2, pady=2)
-    toolbar.pack(side=TOP, fill=X)
-    property_editor.pack(side=LEFT, fill=Y)
-    truss_view.pack(expand=YES, fill=BOTH)
+    return toolbar
+
+def bind_hotkeys():
     root.bind("<Delete>", on_del_click)
     root.bind('<Escape>', lambda _: state_update(dict(action="cancel")))
+    root.bind("<Control-n>", lambda _: truss.new())
+    root.bind("<Control-l>", lambda _: load())
+    root.bind("<Control-s>", lambda _: save())
+    root.bind("<Control-z>", lambda _: truss.undo())
+    root.bind("<Control-y>", lambda _: truss.redo())
+    root.bind("<Control-a>", lambda _: truss_view.create_labels())
+    root.bind("<Control-u>", lambda _: truss_view.refresh())
+    root.bind("<Control-c>", lambda _: calculate())
+    root.bind("<Control-p>", lambda _: state.new("PinnedSupport"))
+    root.bind("<Control-r>", lambda _: state.new("RollerSupport"))
+    root.bind("<Control-j>", lambda _: state.new("PinJoint"))
+    root.bind("<Control-b>", lambda _: state.new("Beam"))
+    root.bind("<Control-f>", lambda _: state.new("Force"))
     truss_view.bind("<Button-1>", on_click)
     truss_view.bind("<Motion>", on_mouse_move)
-    truss.append_observer_callback(truss_view.update_truss)
-    truss.append_observer_callback(truss_update)
-    property_editor.append_observer_callback(state_update)
-    root.mainloop()
 
 def on_click(event):
     x, y = truss_view.to_truss_pos(event.x, event.y)
