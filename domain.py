@@ -4,7 +4,7 @@ from itertools import repeat
 from math import atan2, cos, sin, radians
 import json
 import re
-import numpy
+import numpy  # type: ignore # pylint: disable=import-error
 from misc import Observable
 
 
@@ -20,6 +20,8 @@ class Truss(Observable):
     def __init__(self):
         super().__init__()
         self.__items = ()
+        self.__undo_history = []
+        self.__redo_history = []
         self.__left = 0
         self.__right = 0
         self.__bottom = 0
@@ -31,6 +33,7 @@ class Truss(Observable):
 
     @items.setter
     def items(self, t):
+        self.__undo_history.append(self.items)
         self.__items = tuple(t)
         self.__remove_invalid()
         self.__update_cache()
@@ -38,7 +41,7 @@ class Truss(Observable):
         self.notify(dict(action="truss modified"))
 
     def __iter__(self):
-        return iter(self.__items)
+        return iter(self.items)
 
     def __remove_invalid(self):
         invalid_beams = tuple(b for b in self.find_by_type("Beam")
@@ -87,6 +90,7 @@ class Truss(Observable):
 
     def new(self):
         self.items = ()
+        self.clear_history()
 
     def append(self, item):
         self.items = self.items + (item,)
@@ -108,6 +112,23 @@ class Truss(Observable):
     def load_from(self, filename):
         with open(filename, "r") as f:
             self.items = json.load(f)
+            self.clear_history()
+
+    def undo(self):
+        if self.__undo_history:
+            self.__redo_history.append(self.items)
+            self.__items = self.__undo_history.pop()
+            self.notify(dict(action="truss modified"))
+
+    def redo(self):
+        if self.__redo_history:
+            self.__undo_history.append(self.items)
+            self.__items = self.__redo_history.pop()
+            self.notify(dict(action="truss modified"))
+
+    def clear_history(self):
+        self.__undo_history.clear()
+        self.__redo_history.clear()
 
     @property
     def width(self):
@@ -149,7 +170,7 @@ class Truss(Observable):
         return tuple(force for force in self.find_by_type("Force")
                      if joint["id"] == force["applied_to"])
 
-    def calculate(self):
+    def calculate(self):  # pylint: disable=too-many-locals
         """
         Calculate reactions using method of joints.
         https://en.wikipedia.org/wiki/Structural_analysis#Method_of_Joints

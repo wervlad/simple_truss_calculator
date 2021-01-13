@@ -5,7 +5,7 @@ from tkinter import (Button, Frame, PhotoImage, Tk,
                      BOTH, FLAT, LEFT, RAISED, TOP, X, Y, YES)
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter.messagebox import showerror
-from tkinter.simpledialog import askfloat
+from tkinter.simpledialog import askfloat  # type: ignore
 from domain import Truss
 from view import TrussView, ItemEditState, TrussPropertyEditor
 
@@ -23,6 +23,8 @@ def main():
     buttons = OrderedDict({"new": truss.new,
                            "load": load,
                            "save": save,
+                           "undo": truss.undo,
+                           "redo": truss.redo,
                            "labels": truss_view.create_labels,
                            "refresh": truss_view.refresh,
                            "calculate": calculate,
