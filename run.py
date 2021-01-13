@@ -14,7 +14,7 @@ from view import TrussView, ItemEditState, TrussPropertyEditor
 root = Tk()
 truss = Truss()
 truss_view = TrussView(root, truss)
-property_editor = TrussPropertyEditor(root, truss)
+property_editor = TrussPropertyEditor(root)
 state = ItemEditState()
 
 def main():
@@ -88,17 +88,24 @@ def state_update(msg):
         truss_view.delete("temporary")
         truss_view.create_item({**item, "id": "temporary"})
         truss_view.tag_lower("temporary")
-    if action in ("create new", "replace"):
+    if action == "finish editing":
         state.default()
-        if not item.get("id"):
+        if item.get("id"):
+            old = truss.find_by_id(item.get("id"))
+        else:
+            old = None
             item["id"] = truss.get_new_id_for(item["type"])
-        truss.replace(msg.get("old"), item)
-    if action == "create force":
+        truss.replace(old, item)
+    if action == "specify force value":
         if item.get("value") is None:
             item["value"] = askfloat("Force value", "Please enter force value",
                                      initialvalue=0, parent=root)
-        action = "create new" if item["value"] else "cancel"
+        action = "finish editing" if item["value"] else "cancel"
         state_update(dict(action=action, item=item))
+    if action == "edit field":
+        item = item.copy()
+        item.pop(msg["field"])
+        state.edit(item)
 
 def calculate():
     state.default()

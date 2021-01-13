@@ -1,8 +1,8 @@
 #!/usr/bin/env python3.7
 # -*- coding: utf-8 -*-
 from math import atan2, degrees
-from tkinter import (Button, Canvas, Entry, Frame, Label, OptionMenu,
-                     StringVar, LAST, E, N, S, W)
+from tkinter import (Button, Canvas, Entry, Frame, Label, StringVar,
+                     LAST, E, N, S, W)
 from misc import camel_to_snake, rotate, Observable
 from domain import Truss
 
@@ -188,6 +188,10 @@ class ItemEditState():
         self.__item = dict(type=item_type)
         self.__state = self._edit_item
 
+    def edit(self, item):
+        self.__item = item
+        self.__state = self._edit_item
+
     def process(self, message):
         return self.__state(message)
 
@@ -206,7 +210,7 @@ class ItemEditState():
 
     def _edit_item(self, msg):
         r = getattr(self, f"_edit_{camel_to_snake(self.__item['type'])}")(msg)
-        if r["action"] in ("create new", "create force"):
+        if r["action"] in ("finish editing", "specify force value"):
             self.default()
         return r
 
@@ -217,7 +221,7 @@ class ItemEditState():
             return self._specify_node("end1", "x1", "y1", msg)
         if self.__item.get("end2") is None:
             return self._specify_node("end2", "x2", "y2", msg)
-        return dict(action="create new", item=self.__item)
+        return dict(action="finish editing", item=self.__item)
 
     def _edit_force(self, msg):
         if self.__item.get("applied_to") is None:
@@ -228,17 +232,17 @@ class ItemEditState():
             ret = self._specify_angle(msg)
             ret["item"]["angle"] = 180 - ret["item"]["angle"]
             return ret
-        return dict(action="create force", item=self.__item)
+        return dict(action="specify force value", item=self.__item)
 
     def _edit_pin_joint(self, msg):
         if self.__item.get("x") is None or self.__item.get("y") is None:
             return self._specify_pos(msg)
-        return dict(action="create new", item=self.__item)
+        return dict(action="finish editing", item=self.__item)
 
     def _edit_pinned_support(self, msg):
         if self.__item.get("x") is None or self.__item.get("y") is None:
             return self._specify_pos(msg)
-        return dict(action="create new", item=self.__item)
+        return dict(action="finish editing", item=self.__item)
 
     def _edit_roller_support(self, msg):
         if self.__item.get("x") is None or self.__item.get("y") is None:
@@ -247,7 +251,7 @@ class ItemEditState():
             return ret
         if self.__item.get("angle") is None:
             return self._specify_angle(msg)
-        return dict(action="create new", item=self.__item)
+        return dict(action="finish editing", item=self.__item)
 
     def _specify_pos(self, msg):
         item = {**self.__item, **dict(x=msg["x"], y=msg["y"])}
@@ -283,13 +287,13 @@ class PropertyEditor(Frame):
             name = p["name"]
             Label(self, text=name).grid(column=0, row=i, **options)
             variables[name] = StringVar(value=p["value"])
-            if p.get("values") is None:
+            if p.get("command") is None:
                 if p.get("editable"):
                     w = Entry(self, textvariable=variables[name])
                 else:
                     w = Label(self, text=p["value"])
             else:
-                w = OptionMenu(self, variables[name], *p["values"])
+                w = Button(self, text=p["value"], command=p["command"])
             w.grid(column=1, row=i, **options)
             i += 1
         Button(self, text="OK", command=ok).grid(column=0, row=i, **options)
@@ -304,85 +308,98 @@ class PropertyEditor(Frame):
 
 
 class TrussPropertyEditor(PropertyEditor, Observable):
-    def __init__(self, master, truss):
+    def __init__(self, master):
         PropertyEditor.__init__(self, master)
         Observable.__init__(self)
-        self.__truss = truss
 
     def show_properties(self, item):
         getattr(self, camel_to_snake(item["type"]))(item)
 
     def beam(self, b):
+        def edit_end1():
+            self.notify(dict(action="edit field", item=b, field="end1"))
+
+        def edit_end2():
+            self.notify(dict(action="edit field", item=b, field="end2"))
+
         def ok():
             new = dict(end1=values["End 1"].get(), end2=values["End 2"].get(),
                        type="Beam", id=values["Beam"].get())
-            self.replace(b, new)
+            self.finish_editing(new)
 
-        nodes = tuple(n["id"] for n in self.__truss.joints) + ("",)
-        ps = [{"name": b["type"], "value": b.get("id"), "editable": False},
-              {"name": "End 1", "value": b.get("end1"), "values": nodes},
-              {"name": "End 2", "value": b.get("end2"), "values": nodes}]
-        values = self.create(properties=ps, ok=ok, cancel=self.cancel)
+        p = [{"name": b["type"], "value": b.get("id"), "editable": False},
+             {"name": "End 1", "value": b.get("end1"), "command": edit_end1},
+             {"name": "End 2", "value": b.get("end2"), "command": edit_end2}]
+        values = self.create(properties=p, ok=ok, cancel=self.cancel)
 
     def pinned_support(self, ps):
         def ok():
             new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
                        type="PinnedSupport", id=values["PinnedSupport"].get())
-            self.replace(ps, new)
+            self.finish_editing(new)
 
-        ps = [{"name": ps["type"], "value": ps.get("id"), "editable": False},
-              {"name": "X", "value": ps.get("x", 0), "editable": True},
-              {"name": "Y", "value": ps.get("y", 0), "editable": True}]
-        values = self.create(properties=ps, ok=ok, cancel=self.cancel)
+        p = [{"name": ps["type"], "value": ps.get("id"), "editable": False},
+             {"name": "X", "value": ps.get("x", 0), "editable": True},
+             {"name": "Y", "value": ps.get("y", 0), "editable": True}]
+        values = self.create(properties=p, ok=ok, cancel=self.cancel)
 
     def roller_support(self, rs):
         def ok():
             new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
                        id=values["RollerSupport"].get(), type="RollerSupport",
                        angle=float(values["Angle"].get()))
-            self.replace(rs, new)
+            self.finish_editing(new)
 
-        ps = [{"name": rs["type"], "value": rs.get("id"), "editable": False},
-              {"name": "X", "value": rs.get("x", 0), "editable": True},
-              {"name": "Y", "value": rs.get("y", 0), "editable": True},
-              {"name": "Angle", "value": rs.get("angle", 0), "editable": True}]
-        values = self.create(properties=ps, ok=ok, cancel=self.cancel)
+        p = [{"name": rs["type"], "value": rs.get("id"), "editable": False},
+             {"name": "X", "value": rs.get("x", 0), "editable": True},
+             {"name": "Y", "value": rs.get("y", 0), "editable": True},
+             {"name": "Angle", "value": rs.get("angle", 0), "editable": True}]
+        values = self.create(properties=p, ok=ok, cancel=self.cancel)
 
     def pin_joint(self, pj):
         def ok():
             new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
                        type="PinJoint", id=values["PinJoint"].get())
-            self.replace(pj, new)
+            self.finish_editing(new)
 
-        ps = [{"name": pj["type"], "value": pj.get("id"), "editable": False},
-              {"name": "X", "value": pj.get("x", 0), "editable": True},
-              {"name": "Y", "value": pj.get("y", 0), "editable": True}]
-        values = self.create(properties=ps, ok=ok, cancel=self.cancel)
+        p = [{"name": pj["type"], "value": pj.get("id"), "editable": False},
+             {"name": "X", "value": pj.get("x", 0), "editable": True},
+             {"name": "Y", "value": pj.get("y", 0), "editable": True}]
+        values = self.create(properties=p, ok=ok, cancel=self.cancel)
 
     def force(self, f):
+        def edit_application():
+            self.notify(dict(action="edit field", item=f, field="applied_to"))
+
         def ok():
             new = dict(id=values["Force"].get(),
                        value=float(values["Value"].get()),
                        applied_to=values["Applied to"].get(),
                        angle=float(values["Angle"].get()), type="Force")
-            self.replace(f, new)
+            self.finish_editing(new)
 
-        js = tuple(n["id"] for n in self.__truss.joints) + ("",)
-        ps = [
-            {"name": f["type"], "value": f.get("id"), "editable": False},
-            {"name": "Applied to", "value": f.get("applied_to"), "values": js},
-            {"name": "Value", "value": f.get("value", 0), "editable": True},
-            {"name": "Angle", "value": f.get("angle", 0), "editable": True}]
-        values = self.create(properties=ps, ok=ok, cancel=self.cancel)
+        p = [{"name": f["type"], "value": f.get("id"), "editable": False},
+             {"name": "Applied to", "value": f.get("applied_to"),
+              "command": edit_application},
+             {"name": "Value", "value": f.get("value", 0), "editable": True},
+             {"name": "Angle", "value": f.get("angle", 0), "editable": True}]
+        values = self.create(properties=p, ok=ok, cancel=self.cancel)
 
     def show_results(self, results):
-        ps = [{"name": "Force", "value": "Value", "editable": False}]
+        p = [{"name": "Force", "value": "Value", "editable": False}]
         for n, v in results.items():
-            ps.append({"name": n, "value": f"{v:>.4f}", "editable": False})
-        self.create(properties=ps, ok=self.cancel, cancel=self.cancel)
+            p.append({"name": n, "value": f"{v:>.4f}", "editable": False})
+        self.create(properties=p, ok=self.cancel, cancel=self.cancel)
 
     def cancel(self):
         self.notify(dict(action="cancel"))
 
-    def replace(self, old, new):
-        self.notify(dict(action="replace", old=old, item=new))
+    def finish_editing(self, item):
+        def all_mandatory_values_specified():
+            fields = Truss.MANDATORY_FIELDS[item["type"]]
+            return all(item.get(f) != "" for f in fields if f != "id")
+
+        if all_mandatory_values_specified():
+            self.notify(dict(action="finish editing", item=item))
+        else:
+            self.cancel()
