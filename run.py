@@ -6,15 +6,16 @@ from tkinter import (Button, Frame, PhotoImage, Tk,
 from tkinter.filedialog import askopenfilename, asksaveasfilename
 from tkinter.messagebox import showerror
 from tkinter.simpledialog import askfloat  # type: ignore
-from domain import Truss
+from domain import History, Truss
 from view import TrussView, ItemEditState, TrussPropertyEditor
 
 
 # global variables
 root = Tk()
 truss = Truss()
-truss_view = TrussView(root, truss)
-property_editor = TrussPropertyEditor(root)
+history = History(truss.items)
+truss_view = TrussView(root, truss, name="truss view")
+property_editor = TrussPropertyEditor(root, name="property editor")
 state = ItemEditState()
 images = {}
 
@@ -28,17 +29,19 @@ def main():
     bind_hotkeys()
     truss.append_observer_callback(truss_view.update_truss)
     truss.append_observer_callback(truss_update)
+    history.append_observer_callback(history_update)
     property_editor.append_observer_callback(state_update)
+    new()
 
     root.mainloop()
 
 def create_toolbar():
-    toolbar = Frame(root, bd=1, relief=RAISED)
-    buttons = OrderedDict({"new": truss.new,
+    toolbar = Frame(root, bd=1, name="toolbar", relief=RAISED)
+    buttons = OrderedDict({"new": new,
                            "load": load,
                            "save": save,
-                           "undo": truss.undo,
-                           "redo": truss.redo,
+                           "undo": undo,
+                           "redo": redo,
                            "labels": truss_view.create_labels,
                            "refresh": truss_view.refresh,
                            "calculate": calculate,
@@ -49,7 +52,7 @@ def create_toolbar():
                            "force": lambda: state.new("Force")})
     for i, f in buttons.items():
         images[i] = PhotoImage(file=f"img/{i}.gif")  # prevent GC
-        Button(toolbar, image=images[i], relief=FLAT, command=f
+        Button(toolbar, name=i, image=images[i], relief=FLAT, command=f
                ).pack(side=LEFT, padx=2, pady=2)
     return toolbar
 
@@ -59,8 +62,8 @@ def bind_hotkeys():
     root.bind("<Control-n>", lambda _: truss.new())
     root.bind("<Control-l>", lambda _: load())
     root.bind("<Control-s>", lambda _: save())
-    root.bind("<Control-z>", lambda _: truss.undo())
-    root.bind("<Control-y>", lambda _: truss.redo())
+    root.bind("<Control-z>", lambda _: undo())
+    root.bind("<Control-y>", lambda _: redo())
     root.bind("<Control-a>", lambda _: truss_view.create_labels())
     root.bind("<Control-u>", lambda _: truss_view.refresh())
     root.bind("<Control-c>", lambda _: calculate())
@@ -89,12 +92,20 @@ def on_mouse_move(event):
     x, y = truss_view.to_truss_pos(event.x, event.y)
     state_update(state.process(dict(action="move", x=x, y=y)))
 
+def history_update(msg):
+    if msg["action"] == "history changed":
+        undo_button = root.nametowidget("toolbar.undo")
+        undo_button["state"] = "normal" if history.can_undo() else "disabled"
+        redo_button = root.nametowidget("toolbar.redo")
+        redo_button["state"] = "normal" if history.can_redo() else "disabled"
+
 def truss_update(msg):
     if msg["action"] == "invalid items removed":
         invalid = ", ".join(f"{i['type']} {i['id']}" for i in msg["items"])
         showerror("Warning", f"Invalid items were removed: {invalid}")
     elif msg["action"] == "truss modified":
         property_editor.clear()
+        history.append(truss.items)
 
 def state_update(msg):
     item = msg.get("item")
@@ -139,6 +150,10 @@ def calculate():
     except ValueError as e:
         showerror("Calculate", e)
 
+def new():
+    truss.new()
+    history.reset(truss.items)
+
 def load():
     filename = askopenfilename(defaultextension=".json",
                                filetypes=[("Truss Data", ".json")],
@@ -147,6 +162,7 @@ def load():
         try:
             state.default()
             truss.load_from(filename)
+            history.reset(truss.items)
         except IOError as error:
             showerror("Failed to load data", error)
 
@@ -159,6 +175,12 @@ def save():
             truss.save_as(filename)
         except IOError as error:
             showerror("Failed to save data", error)
+
+def undo():
+    truss.items = history.undo()
+
+def redo():
+    truss.items = history.redo()
 
 if __name__ == "__main__":
     main()

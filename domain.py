@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.7
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from itertools import repeat
 from math import atan2, cos, sin, radians
@@ -6,6 +6,48 @@ import json
 import re
 import numpy  # type: ignore # pylint: disable=import-error
 from misc import Observable
+
+
+class History(Observable):
+    def __init__(self, state):
+        super().__init__()
+        self.__state = state
+        self.__undo_history = []
+        self.__redo_history = []
+        self.reset(state)
+
+    def append(self, state):
+        if state != self.__state:
+            self.__undo_history.append(self.__state)
+            self.__state = state
+            self.__redo_history.clear()
+            self.notify(dict(action="history changed"))
+
+    def undo(self):
+        if self.can_undo():
+            self.__redo_history.append(self.__state)
+            self.__state = self.__undo_history.pop()
+            self.notify(dict(action="history changed"))
+        return self.__state
+
+    def redo(self):
+        if self.can_redo():
+            self.__undo_history.append(self.__state)
+            self.__state = self.__redo_history.pop()
+            self.notify(dict(action="history changed"))
+        return self.__state
+
+    def can_undo(self):
+        return bool(self.__undo_history)
+
+    def can_redo(self):
+        return bool(self.__redo_history)
+
+    def reset(self, state):
+        self.__state = state
+        self.__undo_history.clear()
+        self.__redo_history.clear()
+        self.notify(dict(action="history changed"))
 
 
 class Truss(Observable):
@@ -20,8 +62,6 @@ class Truss(Observable):
     def __init__(self):
         super().__init__()
         self.__items = ()
-        self.__undo_history = []
-        self.__redo_history = []
         self.__left = 0
         self.__right = 0
         self.__bottom = 0
@@ -33,7 +73,6 @@ class Truss(Observable):
 
     @items.setter
     def items(self, t):
-        self.__undo_history.append(self.items)
         self.__items = tuple(t)
         self.__remove_invalid()
         self.__update_cache()
@@ -90,7 +129,6 @@ class Truss(Observable):
 
     def new(self):
         self.items = ()
-        self.clear_history()
 
     def append(self, item):
         self.items = self.items + (item,)
@@ -112,23 +150,6 @@ class Truss(Observable):
     def load_from(self, filename):
         with open(filename, "r") as f:
             self.items = json.load(f)
-            self.clear_history()
-
-    def undo(self):
-        if self.__undo_history:
-            self.__redo_history.append(self.items)
-            self.__items = self.__undo_history.pop()
-            self.notify(dict(action="truss modified"))
-
-    def redo(self):
-        if self.__redo_history:
-            self.__undo_history.append(self.items)
-            self.__items = self.__redo_history.pop()
-            self.notify(dict(action="truss modified"))
-
-    def clear_history(self):
-        self.__undo_history.clear()
-        self.__redo_history.clear()
 
     @property
     def width(self):

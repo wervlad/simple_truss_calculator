@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.7
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from math import atan2, degrees
 from tkinter import (Button, Canvas, Entry, Frame, Label, StringVar,
@@ -18,8 +18,8 @@ class TrussView(Canvas):
     FORCE_COLOR = "red"
     ACTIVE_COLOR = "green"
 
-    def __init__(self, master, truss):
-        super().__init__(master, bg=self.BACKGROUND_COLOR)
+    def __init__(self, master, truss, **kw):
+        super().__init__(master, bg=self.BACKGROUND_COLOR, **kw)
         self.bind('<Configure>', lambda _: self.refresh())
         self.__truss = truss
         self.__scale = self.__get_optimal_scale()
@@ -308,8 +308,8 @@ class PropertyEditor(Frame):
 
 
 class TrussPropertyEditor(PropertyEditor, Observable):
-    def __init__(self, master):
-        PropertyEditor.__init__(self, master)
+    def __init__(self, master, **kw):
+        PropertyEditor.__init__(self, master, **kw)
         Observable.__init__(self)
 
     def show_properties(self, item):
