@@ -1,6 +1,8 @@
 # Simple Truss Calculator
 ![app screenshot](/screenshots/calculate.png?raw=true)
 
+![animated demo](/screenshots/animated_demo.gif?raw=true)
+
 ## Installation
 **Python** and **NumPy** are required to run this app. In Linux Python is most likely already installed. Check the version to ensure you have at least Python 3.6 that supports f-strings. Otherwise use your distro package manager to install it. In Windows download installer from [Python home page](https://www.python.org/downloads/). To install NumPy follow instructions on [NumPy home page](https://numpy.org/install/).
 
@@ -9,8 +11,6 @@ Download project files and start application:
     git clone https://github.com/wervlad/simple_truss_calculator.git
     cd simple_truss_calculator
     python3 run.py
-
-You'll also need **Behave** to run system tests and **Coverage** for test coverage measurement.
 
 ## Hotkeys
 - Delete - delete selected item
