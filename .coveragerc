@@ -1,0 +1,6 @@
+[run]
+source = .
+omit = *tests*,features/*,run.py,*__init__.py
+
+[report]
+omit = *tests*,features/*,run.py,*__init__.py
