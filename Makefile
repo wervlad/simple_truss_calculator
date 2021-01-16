@@ -5,15 +5,20 @@ INTERPRETER = python3
 run: $(EXECUTABLE)
 	$(INTERPRETER) $(EXECUTABLE)
 
-tests:
+tests: system_tests unit_tests
+
+system_tests:
 	behave
 
+unit_tests:
+	$(INTERPRETER) run_unit_tests.py
+
 coverage_measure:
-	coverage run --source='.' -m behave
+	coverage run run_unit_tests.py
 	coverage report
 
 coverage_measure_html:
-	coverage run --source='.' -m behave
+	coverage run run_unit_tests.py
 	coverage html
 	@xdg-open htmlcov/index.html
 
@@ -28,4 +33,4 @@ clean:
 	rm -rf tags include_tags __pycache__ */__pycache__ */*/__pycache__ \
 		.mypy_cache */.mypy_cache */*/.mypy_cache .coverage htmlcov
 
-.PHONY: clean tags tests
+.PHONY: clean tags unit_tests
