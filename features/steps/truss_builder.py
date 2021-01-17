@@ -16,12 +16,12 @@ def pinned_support_is_in_the_truss(context):
     context.test.assertIn(ps, context.truss.items)
 
 @when("then adds a roller support")
-def add_beam(context):
+def add_roller_support(context):
     rs = {"id": "PS1", "type": "RollerSupport", "x": 5.0, "y": 0.0, "angle": 0}
     context.truss.append(rs)
 
 @then("she will see a pinned support and a roller support in the truss")
-def pinned_support_and_beam_is_in_the_truss(context):
+def pinned_support_and_roller_support_is_in_the_truss(context):
     ps = {"id": "PS1", "type": "PinnedSupport", "x": 0.0, "y": 0.0}
     rs = {"id": "PS1", "type": "RollerSupport", "x": 5.0, "y": 0.0, "angle": 0}
     context.test.assertIn(ps, context.truss.items)
@@ -40,7 +40,7 @@ def turss_is_empty(context):
 def add_some_elements_to_new_truss(context):
     create_new_truss(context)
     add_pinned_support(context)
-    add_beam(context)
+    add_roller_support(context)
 
 @when("Betty saves truss to file '{filename}'")
 def save_to_file(context, filename):
