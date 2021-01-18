@@ -57,7 +57,7 @@ class Truss(Observable):
         PinnedSupport=("type", "id", "x", "y"),
         RollerSupport=("type", "id", "x", "y", "angle"),
         Beam=("type", "id", "end1", "end2"),
-        Force=("type", "id", "angle", "applied_to", "value"))
+        Force=("type", "id", "applied_to", "angle", "value"))
 
     def __init__(self):
         super().__init__()
