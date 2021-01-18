@@ -10,7 +10,7 @@ Download project files and start application:
 
     git clone https://github.com/wervlad/simple_truss_calculator.git
     cd simple_truss_calculator
-    python3 run.py
+    python3 run.pyw
 
 ## Hotkeys
 - Delete - delete selected item

@@ -1,5 +1,5 @@
 SOURCES = $(wildcard *.py) $(wildcard */*.py)
-EXECUTABLE = run.py
+EXECUTABLE = run.pyw
 INTERPRETER = python3
 
 run: $(EXECUTABLE)
