@@ -4,7 +4,7 @@ from collections import OrderedDict
 from tkinter import (Button, Frame, PhotoImage, Tk,
                      BOTH, FLAT, LEFT, RAISED, TOP, X, Y, YES)
 from tkinter.filedialog import askopenfilename, asksaveasfilename
-from tkinter.messagebox import showerror
+from tkinter.messagebox import showwarning
 from tkinter.simpledialog import askfloat  # type: ignore
 from domain import History, Truss
 from view import TrussView, ItemEditState, TrussPropertyEditor
@@ -102,7 +102,7 @@ def history_update(msg):
 def truss_update(msg):
     if msg["action"] == "invalid items removed":
         invalid = ", ".join(f"{i['type']} {i['id']}" for i in msg["items"])
-        showerror("Warning", f"Invalid items were removed: {invalid}")
+        showwarning("Warning", f"Invalid items were removed: {invalid}")
     elif msg["action"] == "truss modified":
         property_editor.clear()
         history.append(truss.items)
@@ -138,17 +138,19 @@ def state_update(msg):
         action = "finish editing" if item["value"] else "cancel"
         state_update(dict(action=action, item=item))
     if action == "edit field":
-        item = item.copy()
-        item.pop(msg["field"])
-        state.edit(item)
+        if msg["field"] in item:
+            item = item.copy()
+            item.pop(msg["field"])
+            state.edit(item)
+            state_update(state.process(dict(action="update", x=0, y=0)))
 
 def calculate():
     state.default()
     try:
         property_editor.show_results(truss.calculate())
         truss_view.create_labels()
-    except ValueError as e:
-        showerror("Calculate", e)
+    except ValueError as error:
+        showwarning("Calculate", error)
 
 def new():
     truss.new()
@@ -164,7 +166,7 @@ def load():
             truss.load_from(filename)
             history.reset(truss.items)
         except IOError as error:
-            showerror("Failed to load data", error)
+            showwarning("Failed to load data", error)
 
 def save():
     filename = asksaveasfilename(defaultextension=".json",
@@ -174,7 +176,7 @@ def save():
         try:
             truss.save_as(filename)
         except IOError as error:
-            showerror("Failed to save data", error)
+            showwarning("Failed to save data", error)
 
 def undo():
     truss.items = history.undo()
