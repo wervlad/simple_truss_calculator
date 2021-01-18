@@ -3,6 +3,7 @@
 from math import atan2, degrees
 from tkinter import (Button, Canvas, Entry, Frame, Label, StringVar,
                      LAST, E, N, S, W)
+from tkinter.messagebox import showwarning
 from misc import camel_to_snake, rotate, Observable
 from domain import Truss
 
@@ -278,30 +279,48 @@ class ItemEditState():
 
 
 class PropertyEditor(Frame):
-    def create(self, properties, ok, cancel):
-        self.clear()
-        options = dict(padx=5, pady=5, sticky=W+E+N+S)
-        variables = {}
+    def __init__(self, master, **kw):
+        super().__init__(master, **kw)
+        self.__variables = {}
+
+    def show(self, properties, ok, cancel):
+        new_vars = {p["name"]: StringVar(value=p["value"]) for p in properties}
+        if self.__variables.keys() == new_vars.keys():
+            for name, var in new_vars.items():
+                self.__variables[name].set(var.get())
+            self.__update_widgets(properties)
+        else:
+            self.clear()
+            self.__variables = new_vars
+            self.__create_widgets(properties, ok, cancel)
+        return self.__variables
+
+    def __create_widgets(self, properties, ok, cancel):
+        o = dict(padx=5, pady=5, sticky=W+E+N+S)
         i = 0
         for p in properties:
             name = p["name"]
-            Label(self, text=name).grid(column=0, row=i, **options)
-            variables[name] = StringVar(value=p["value"])
-            if p.get("command") is None:
-                if p.get("editable"):
-                    w = Entry(self, textvariable=variables[name])
-                else:
-                    w = Label(self, text=p["value"])
+            Label(self, text=name).grid(column=0, row=i, **o)
+            if p.get("command"):
+                w = Button(self, name=camel_to_snake(name),
+                           text=p["value"], command=p["command"])
+            elif p.get("editable"):
+                w = Entry(self, textvariable=self.__variables[name])
             else:
-                w = Button(self, text=p["value"], command=p["command"])
-            w.grid(column=1, row=i, **options)
+                w = Label(self, text=p["value"])
+            w.grid(column=1, row=i, **o)
             i += 1
-        Button(self, text="OK", command=ok).grid(column=0, row=i, **options)
-        Button(self, text="Cancel", command=cancel
-               ).grid(column=1, row=i, **options)
-        return variables
+        Button(self, text="OK", command=ok).grid(column=0, row=i, **o)
+        Button(self, text="Cancel", command=cancel).grid(column=1, row=i, **o)
+
+    def __update_widgets(self, properties):
+        for p in properties:
+            if p.get("command"):
+                btn = self.nametowidget(camel_to_snake(p["name"]))
+                btn["text"] = p["value"] if p.get("value") is not None else ""
 
     def clear(self):
+        self.__variables = {}
         for child in self.winfo_children():
             child.destroy()
         Frame(self).grid()  # hack to hide empty instance
@@ -323,73 +342,98 @@ class TrussPropertyEditor(PropertyEditor, Observable):
             self.notify(dict(action="edit field", item=b, field="end2"))
 
         def ok():
-            new = dict(end1=values["End 1"].get(), end2=values["End 2"].get(),
-                       type="Beam", id=values["Beam"].get())
+            new = dict(type="Beam",
+                       id=values["Beam"].get(),
+                       end1=self.nametowidget("end 1")["text"],
+                       end2=self.nametowidget("end 2")["text"])
             self.finish_editing(new)
 
         p = [{"name": b["type"], "value": b.get("id"), "editable": False},
              {"name": "End 1", "value": b.get("end1"), "command": edit_end1},
              {"name": "End 2", "value": b.get("end2"), "command": edit_end2}]
-        values = self.create(properties=p, ok=ok, cancel=self.cancel)
+        values = self.show(properties=p, ok=ok, cancel=self.cancel)
 
     def pinned_support(self, ps):
         def ok():
-            new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
-                       type="PinnedSupport", id=values["PinnedSupport"].get())
-            self.finish_editing(new)
+            try:
+                new = dict(type="PinnedSupport",
+                           id=values["PinnedSupport"].get(),
+                           x=self.getdouble(values["X"].get()),
+                           y=self.getdouble(values["Y"].get()))
+                self.finish_editing(new)
+            except ValueError:
+                self.__show_not_a_float_warning()
 
         p = [{"name": ps["type"], "value": ps.get("id"), "editable": False},
              {"name": "X", "value": ps.get("x", 0), "editable": True},
              {"name": "Y", "value": ps.get("y", 0), "editable": True}]
-        values = self.create(properties=p, ok=ok, cancel=self.cancel)
+        values = self.show(properties=p, ok=ok, cancel=self.cancel)
 
     def roller_support(self, rs):
         def ok():
-            new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
-                       id=values["RollerSupport"].get(), type="RollerSupport",
-                       angle=float(values["Angle"].get()))
-            self.finish_editing(new)
+            try:
+                new = dict(type="RollerSupport",
+                           id=values["RollerSupport"].get(),
+                           x=self.getdouble(values["X"].get()),
+                           y=self.getdouble(values["Y"].get()),
+                           angle=self.getdouble(values["Angle"].get()))
+                self.finish_editing(new)
+            except ValueError:
+                self.__show_not_a_float_warning()
 
         p = [{"name": rs["type"], "value": rs.get("id"), "editable": False},
              {"name": "X", "value": rs.get("x", 0), "editable": True},
              {"name": "Y", "value": rs.get("y", 0), "editable": True},
              {"name": "Angle", "value": rs.get("angle", 0), "editable": True}]
-        values = self.create(properties=p, ok=ok, cancel=self.cancel)
+        values = self.show(properties=p, ok=ok, cancel=self.cancel)
 
     def pin_joint(self, pj):
         def ok():
-            new = dict(x=float(values["X"].get()), y=float(values["Y"].get()),
-                       type="PinJoint", id=values["PinJoint"].get())
-            self.finish_editing(new)
+            try:
+                new = dict(type="PinJoint",
+                           id=values["PinJoint"].get(),
+                           x=self.getdouble(values["X"].get()),
+                           y=self.getdouble(values["Y"].get()))
+                self.finish_editing(new)
+            except ValueError:
+                self.__show_not_a_float_warning()
 
         p = [{"name": pj["type"], "value": pj.get("id"), "editable": False},
              {"name": "X", "value": pj.get("x", 0), "editable": True},
              {"name": "Y", "value": pj.get("y", 0), "editable": True}]
-        values = self.create(properties=p, ok=ok, cancel=self.cancel)
+        values = self.show(properties=p, ok=ok, cancel=self.cancel)
 
     def force(self, f):
         def edit_application():
             self.notify(dict(action="edit field", item=f, field="applied_to"))
 
         def ok():
-            new = dict(id=values["Force"].get(),
-                       value=float(values["Value"].get()),
-                       applied_to=values["Applied to"].get(),
-                       angle=float(values["Angle"].get()), type="Force")
-            self.finish_editing(new)
+            try:
+                new = dict(type="Force",
+                           id=values["Force"].get(),
+                           applied_to=self.nametowidget("applied to")["text"],
+                           angle=self.getdouble(values["Angle"].get()),
+                           value=self.getdouble(values["Value"].get()))
+                self.finish_editing(new)
+            except ValueError:
+                self.__show_not_a_float_warning()
 
         p = [{"name": f["type"], "value": f.get("id"), "editable": False},
              {"name": "Applied to", "value": f.get("applied_to"),
               "command": edit_application},
-             {"name": "Value", "value": f.get("value", 0), "editable": True},
-             {"name": "Angle", "value": f.get("angle", 0), "editable": True}]
-        values = self.create(properties=p, ok=ok, cancel=self.cancel)
+             {"name": "Angle", "value": f.get("angle", 0), "editable": True},
+             {"name": "Value", "value": f.get("value", 0), "editable": True}]
+        values = self.show(properties=p, ok=ok, cancel=self.cancel)
+
+    def __show_not_a_float_warning(self):
+        showwarning(parent=self, title="Illegal value",
+                    message="Not a floating point value.\nPlease try again")
 
     def show_results(self, results):
         p = [{"name": "Force", "value": "Value", "editable": False}]
         for n, v in results.items():
             p.append({"name": n, "value": f"{v:>.4f}", "editable": False})
-        self.create(properties=p, ok=self.cancel, cancel=self.cancel)
+        self.show(properties=p, ok=self.cancel, cancel=self.cancel)
 
     def cancel(self):
         self.notify(dict(action="cancel"))
