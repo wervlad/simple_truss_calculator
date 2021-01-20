@@ -12,6 +12,9 @@ Download project files and start application:
     cd simple_truss_calculator
     python3 run.pyw
 
+## Important notes
+Pinned supports X reactions are directed to the right, Y reactions - to the top. All beams are presumably compressed. If result is negative, it means that force in fact is acting in opposite direction. For example, minus sign in front of force in beam means that it is under tension and not under compression as was supposed.
+
 ## Hotkeys
 - Delete - delete selected item
 - Escape - cancel creating/editing item and return to normal mode
